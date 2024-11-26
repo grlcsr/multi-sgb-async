@@ -1,0 +1,8 @@
+[package]
+name = "multi-sgb-async"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.41.1", features = ["full"] }
+tokio-stream = "0.1.16"
