@@ -1,6 +1,24 @@
+mod streamer;
+
+use tokio::runtime::Runtime;
+use streamer::SGBStreamer;
+
 fn main() {
-    let mut rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        println!("Hello async world!");
-    })
+    let runtime: Runtime = Runtime::new().unwrap();
+    runtime.block_on(
+        runtime.spawn(async_main())
+    ).unwrap();
+}
+
+async fn async_main() {
+    let serial = "RNG46856";
+
+    let serial_stream = SGBStreamer::new(serial);
+
+    serial_stream.await;
+
+
+    use tokio::time::{Duration};
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
 }
