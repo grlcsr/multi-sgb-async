@@ -2,10 +2,11 @@ mod base;
 mod ftdi_wrapper;
 mod stream_reader;
 
-use std::future::Future;
+use std::future::{Future, Pending};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Duration;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use ftdi_wrapper::FtdiBoard;
 use stream_reader::{DeviceStream, StreamResult};
@@ -13,6 +14,7 @@ use tokio_stream::{Stream, StreamExt};
 
 enum StreamerState {
     OpenConnection,
+    FlushInit(Pin<Box<DeviceStream>>),
     ReadFlash,
     Initalization,
     TempStabilization,
@@ -26,7 +28,6 @@ pub struct SGBStreamer {
     state: StreamerState,
     serial: String,
     board: FtdiBoard,
-    flushing: bool,
 }
 
 impl SGBStreamer {
@@ -35,42 +36,13 @@ impl SGBStreamer {
             serial: serial.to_string(),
             state: StreamerState::OpenConnection,
             board: FtdiBoard::new(None),
-            flushing: false,
         }
     }
 
-    fn set_flushing(&mut self, is_flushing: bool) {
-        self.flushing = is_flushing;
-    }
-
-    fn is_flushing(&mut self) -> bool {
-        self.flushing
-    }
-
-    fn flush_device(&mut self) {
+    fn flush_device(&mut self) -> Pin<Box<DeviceStream>> {
         let timeout = Duration::from_secs(1);
         let board_clone = self.board.clone();
-
-        /*let flush_Stream = tokio::spawn(async move {
-            let mut flush = DeviceStream::new(board_clone, timeout);
-
-            loop {
-                match flush.next().await {
-                    Some(stream) => {
-                        println!("{:?}", stream);
-                    }
-                    None => {
-                        println!("Stream completed. Restarting...");
-                        break;
-                    }
-                }
-            }
-        });
-
-        if flush_Stream.is_finished() {
-            self.set_flushing(false);
-        }*/
-
+        Box::pin(DeviceStream::new(board_clone, timeout))
     }
 
     fn open_connection(&mut self) {
@@ -83,32 +55,43 @@ impl Future for SGBStreamer {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         loop {
-            if !self.is_flushing() {
-                match self.state {
-                    StreamerState::OpenConnection => {
-                        println!("Poll2");
-                        self.open_connection();
-                        self.set_flushing(true);
-                        println!("Poll3");
-                        self.state = StreamerState::ReadFlash;
+            match &self.state {
+                StreamerState::OpenConnection => {
+                    self.open_connection();
+                    self.state = StreamerState::FlushInit(self.flush_device());
 
-                        cx.waker().wake_by_ref();
-                        return Poll::Pending;
-                    }
-
-                    StreamerState::ReadFlash => {
-                        println!("Readflash");
-                        return Poll::Ready(());
-                    }
-                    StreamerState::Initalization => todo!(),
-                    StreamerState::TempStabilization => todo!(),
-                    StreamerState::ReadStream => todo!(),
-                    StreamerState::ReadTests => todo!(),
-                    StreamerState::TempCompensation => todo!(),
-                    StreamerState::Termination => todo!(),
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
                 }
-            } else {
-                self.flush_device();
+
+                StreamerState::FlushInit(flusher) => {
+                    while let item = flusher.clone().as_mut().poll_next(cx) {
+                        match item {
+                            Poll::Ready(Some(buf)) => {
+                                println!("Reveived: {:?}", buf);
+                            }
+                            Poll::Ready(None) => {
+                                println!("Flushing complete.");
+                                self.state = StreamerState::ReadFlash;
+                                break;
+                            }
+                            Poll::Pending => {
+                                return Poll::Pending;
+                            }
+                        }
+                    }
+                }
+
+                StreamerState::ReadFlash => {
+                    println!("Readflash");
+                    return Poll::Ready(());
+                }
+                StreamerState::Initalization => todo!(),
+                StreamerState::TempStabilization => todo!(),
+                StreamerState::ReadStream => todo!(),
+                StreamerState::ReadTests => todo!(),
+                StreamerState::TempCompensation => todo!(),
+                StreamerState::Termination => todo!(),
             }
         }
     }

@@ -5,9 +5,6 @@ use tokio_stream::Stream;
 
 use super::ftdi_wrapper::FtdiBoard;
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 const BUFFER_SIZE: usize = 256;
 
 #[derive(Debug)]
@@ -16,8 +13,9 @@ pub struct StreamResult {
     bytes_read: usize
 }
 
+#[derive(Clone)]
 pub struct DeviceStream {
-    board: FtdiBoard, //Arc<Mutex<&'a mut FtdiBoard>>,
+    board: FtdiBoard,
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
@@ -64,9 +62,8 @@ impl Stream for DeviceStream {
                 tokio::time::sleep(delay).await;
                 waker.wake();
             });
+            return Poll::Pending;
         }
-
-        Poll::Pending
     }
 }
 
