@@ -9,19 +9,19 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct FtdiBoard  {
-    device: Arc<Mutex<Ftdi>>,
+    device: Option<Arc<Mutex<Ftdi>>>,
 }
 
 impl Default for FtdiBoard {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 impl Clone for FtdiBoard {
-    fn clone(&self) -> FtdiBoard {
+    fn clone(&self) -> Self {
         FtdiBoard {
-            device: Arc::clone(&self.device),
+            device: self.device.as_ref().map(Arc::clone),
         }
     }
 }
@@ -30,10 +30,16 @@ impl FtdiBoard {
     const REQ_WRITE_PACK_FIRST: u8 = 0xFE;
     const REQ_WRITE_PACK_SECOND: u8 = 0xFF;
 
-    pub fn new() -> Self {
-        Self {
-            device: Arc::new(Mutex::new(Ftdi::new().unwrap()))
+    pub fn new(t: Option<Ftdi>) -> Self {        
+        match t {
+            None => Self {
+                device: None
+            },
+            Some(t) => Self {
+                device: Some(Arc::new(Mutex::new(t)))
+            }
         }
+        
     }
 
     pub fn clean_buffer(&mut self) -> Result<(), FtdiBoardStatus> {
@@ -45,8 +51,7 @@ impl FtdiBoard {
     }
     
     pub fn open_with_idx(index: i32) -> Result<FtdiBoard, FtdiBoardStatus> {
-        let mut board: FtdiBoard = FtdiBoard::new();
-        *board.get_device() = Ftdi::with_index(index)?;
+        let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_index(index)?));
 
         board.device_setup()?;
         board.clean_buffer()?;
@@ -56,9 +61,7 @@ impl FtdiBoard {
     }
 
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
-        let mut board: FtdiBoard = FtdiBoard::new();
-        *board.get_device() = Ftdi::with_serial_number(serial_number)?;
-        println!("Poll222");
+        let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
         board.device_setup()?;
         board.clean_buffer()?;
@@ -80,7 +83,12 @@ impl FtdiBoard {
         Ok(())
     }
 
-    fn get_device(&mut self) -> MutexGuard<'_, Ftdi, > {
-        self.device.as_ref().lock().unwrap()
+    fn get_device(&mut self) -> MutexGuard<'_, Ftdi> {
+        match &self.device {
+            Some(arc_mutex) => {
+                arc_mutex.as_ref().lock().expect("Failed to lock device.")
+            }
+            None => panic!("No device was found.")
+        }
     }
 }
