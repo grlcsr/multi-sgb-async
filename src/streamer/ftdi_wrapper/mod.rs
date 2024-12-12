@@ -3,9 +3,8 @@ pub mod ft_status;
 use ft_status::*;
 use core::time::Duration;
 use libftd2xx::{BitMode, DeviceInfo, DeviceStatus, Ftdi, FtdiCommon};
-
-
 use std::sync::{Arc, Mutex, MutexGuard};
+
 
 #[derive(Debug)]
 pub struct FtdiBoard  {
@@ -15,14 +14,6 @@ pub struct FtdiBoard  {
 impl Default for FtdiBoard {
     fn default() -> Self {
         Self::new(None)
-    }
-}
-
-impl Clone for FtdiBoard {
-    fn clone(&self) -> Self {
-        FtdiBoard {
-            device: self.device.as_ref().map(Arc::clone),
-        }
     }
 }
 
@@ -89,6 +80,14 @@ impl FtdiBoard {
                 arc_mutex.as_ref().lock().expect("Failed to lock device.")
             }
             None => panic!("No device was found.")
+        }
+    }
+}
+
+impl Clone for FtdiBoard {
+    fn clone(&self) -> Self {
+        FtdiBoard {
+            device: self.device.as_ref().map(Arc::clone),
         }
     }
 }

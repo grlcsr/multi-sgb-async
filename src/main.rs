@@ -1,11 +1,13 @@
 mod streamer;
 
+use streamer::stream_reader::DeviceStream;
 use tokio::runtime::Runtime;
 use streamer::SGBStreamer;
+use streamer::ftdi_wrapper::FtdiBoard;
 
 fn main() {
 
-    use libftd2xx::{list_devices, Ftdi};
+    use libftd2xx::list_devices;
     println!("{:?}", list_devices());
 
     let runtime: Runtime = Runtime::new().unwrap();
@@ -19,7 +21,10 @@ async fn async_main() {
 
     //TODO spostare openconnection qui e creare lo stream da passare con la connessione aperta
 
-    let serial_stream = SGBStreamer::new(serial);
+    let mut board = FtdiBoard::default();
+    let mut strim = DeviceStream::default();
+
+    let serial_stream = SGBStreamer::new(serial, &mut board, &mut strim);
 
     serial_stream.await;
 

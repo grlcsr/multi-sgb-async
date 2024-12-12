@@ -1,20 +1,19 @@
 mod base;
-mod ftdi_wrapper;
-mod stream_reader;
+pub(crate) mod ftdi_wrapper;
+pub(crate) mod stream_reader;
 
-use std::future::{Future, Pending};
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ftdi_wrapper::FtdiBoard;
 use stream_reader::{DeviceStream, StreamResult};
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
 
 enum StreamerState {
     OpenConnection,
-    FlushInit(Pin<Box<DeviceStream>>),
+    FlushInit,
     ReadFlash,
     Initalization,
     TempStabilization,
@@ -24,33 +23,39 @@ enum StreamerState {
     Termination,
 }
 
-pub struct SGBStreamer {
+pub struct SGBStreamer<'a,'b> {
     state: StreamerState,
     serial: String,
-    board: FtdiBoard,
+    board: &'a mut FtdiBoard,
+    rx_stream: &'b mut DeviceStream,
+
+    total_streamed_bytes: usize,
 }
 
-impl SGBStreamer {
-    pub fn new(serial: &'static str) -> Self {
+impl<'a,'b> SGBStreamer<'a,'b> {    
+    pub fn new(serial: &'static str, board: &'a mut FtdiBoard, rx_stream: &'b mut DeviceStream) -> Self {
         Self {
             serial: serial.to_string(),
             state: StreamerState::OpenConnection,
-            board: FtdiBoard::new(None),
+            board,
+            rx_stream,
+
+            total_streamed_bytes: 0,
         }
     }
 
-    fn flush_device(&mut self) -> Pin<Box<DeviceStream>> {
-        let timeout = Duration::from_secs(1);
-        let board_clone = self.board.clone();
-        Box::pin(DeviceStream::new(board_clone, timeout))
+    fn flush_device(&mut self) {
+        self.rx_stream.set_timeout(Duration::from_secs(1));
     }
 
     fn open_connection(&mut self) {
-        self.board = base::open_with_serial(&self.serial).unwrap();
+        *self.board = base::open_with_serial(&self.serial).unwrap();
+        *self.rx_stream = DeviceStream::new(self.board.clone());
+        self.state = StreamerState::FlushInit;
     }
 }
 
-impl Future for SGBStreamer {
+impl<'a,'b> Future for SGBStreamer<'a,'b> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
@@ -58,20 +63,21 @@ impl Future for SGBStreamer {
             match &self.state {
                 StreamerState::OpenConnection => {
                     self.open_connection();
-                    self.state = StreamerState::FlushInit(self.flush_device());
+                    self.flush_device();
 
                     cx.waker().wake_by_ref();
                     return Poll::Pending;
                 }
 
-                StreamerState::FlushInit(flusher) => {
-                    while let item = flusher.clone().as_mut().poll_next(cx) {
+                StreamerState::FlushInit => {
+                    while let item = Pin::new(&mut self.rx_stream).poll_next(cx) {
                         match item {
                             Poll::Ready(Some(buf)) => {
-                                println!("Reveived: {:?}", buf);
+                                println!("Flushing {} bytes", buf.bytes_read);
+                                self.total_streamed_bytes += buf.bytes_read;
                             }
                             Poll::Ready(None) => {
-                                println!("Flushing complete.");
+                                println!("Flushing complete. Flushed {} bytes.", self.total_streamed_bytes);
                                 self.state = StreamerState::ReadFlash;
                                 break;
                             }

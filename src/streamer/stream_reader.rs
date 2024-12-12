@@ -9,11 +9,11 @@ const BUFFER_SIZE: usize = 256;
 
 #[derive(Debug)]
 pub struct StreamResult {
-    buf: [u8; BUFFER_SIZE],
-    bytes_read: usize
+    pub buf: [u8; BUFFER_SIZE],
+    pub bytes_read: usize
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DeviceStream {
     board: FtdiBoard,
     last_poll_time: Instant,
@@ -21,22 +21,31 @@ pub struct DeviceStream {
     timeout: Duration,
 }
 
+impl Default for DeviceStream {
+    fn default() -> Self {
+        Self::new(FtdiBoard::default())
+    }
+}
+
 impl DeviceStream {
-    pub fn new(board: FtdiBoard, timeout: Duration) -> Self {
+    pub fn new(board: FtdiBoard) -> Self {
         Self {
             board,
-            timeout,
+            timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
             delay: Duration::from_millis(2),
         }
+    }
+
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 }
 
 impl Stream for DeviceStream {
     type Item = StreamResult;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // First check timeout
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {        
         if Instant::now().duration_since(self.last_poll_time) > self.timeout {
             println!("Timeout exceeded!!");
             return Poll::Ready(None);
@@ -66,35 +75,3 @@ impl Stream for DeviceStream {
         }
     }
 }
-
-/*
-
-pub fn flush_device(&mut self) -> Result<usize, FtdiBoardStatus> {
-            let time_out: Duration = Duration::from_secs(1);
-            let mut local_buf: [u8; 1000] = [0; 1000];
-
-            let mut total_read_bytes: usize = 0;
-            let _ = loop {
-                let mut start_time: Instant = Instant::now();
-                let mut amount_read: usize = 0;
-                let result: Result<usize, FtdiBoardStatus> = loop {
-                    if self.get_queue_status()? > 0 {
-                        amount_read = self.read_comm(&mut local_buf)?;
-                        total_read_bytes += amount_read;
-                        start_time = Instant::now();
-                    }
-
-                    if Instant::now().checked_duration_since(start_time) > Some(time_out) {
-                        println!("Flush device timeout! Amount read: {}. Total read: {}.", amount_read, total_read_bytes);
-                        break Ok::<usize, FtdiBoardStatus>(amount_read);
-                    }
-                };
-
-                if result? == 0 {
-                    let tmp: usize = 0;
-                    break Ok::<usize, FtdiBoardStatus>(tmp);
-                };
-            };
-            Ok(total_read_bytes)
-        }
-        */
