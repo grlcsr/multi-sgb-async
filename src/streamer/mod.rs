@@ -1,13 +1,11 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
-use std::future::Future;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::future::Future;
 use std::time::Duration;
 use tokio_stream::Stream;
-
-use crate::raplibs::flash;
+use std::task::{Context, Poll};
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
 use super::raplibs::{base, flash::FlashData};
@@ -15,7 +13,6 @@ use stream_reader::{DeviceStream, StreamResult};
 
 enum StreamerState {
     OpenConnection,
-    //FlushInit,
     ReadFlash,
     Initalization,
     TempStabilization,
@@ -71,7 +68,6 @@ impl<'a, 'b> SGBStreamer<'a, 'b> {
     fn open_connection(&mut self) {
         *self.board = base::open_with_serial(&self.serial).unwrap();
         *self.rx_stream = DeviceStream::new(self.board.clone());
-        //self.state = StreamerState::FlushInit;
     }
 }
 
@@ -112,7 +108,7 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
                         cx.waker().wake_by_ref();
                         return Poll::Pending;
                     }
-                    
+
                     StreamerState::ReadFlash => {
                         println!("Initializing Flash data.");
                         let board: &FtdiBoard = &self.board;
