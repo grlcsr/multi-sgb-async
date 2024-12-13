@@ -4,8 +4,7 @@ use std::time::{Duration, Instant};
 use tokio_stream::Stream;
 
 use super::ftdi_wrapper::FtdiBoard;
-
-const BUFFER_SIZE: usize = 256;
+use super::global_data::BUFFER_SIZE;
 
 #[derive(Debug)]
 pub struct StreamResult {

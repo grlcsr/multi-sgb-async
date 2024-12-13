@@ -1,4 +1,5 @@
 mod base;
+pub(crate) mod global_data;
 pub(crate) mod ftdi_wrapper;
 pub(crate) mod stream_reader;
 
@@ -73,7 +74,6 @@ impl<'a,'b> Future for SGBStreamer<'a,'b> {
                     while let item = Pin::new(&mut self.rx_stream).poll_next(cx) {
                         match item {
                             Poll::Ready(Some(buf)) => {
-                                println!("Flushing {} bytes", buf.bytes_read);
                                 self.total_streamed_bytes += buf.bytes_read;
                             }
                             Poll::Ready(None) => {
