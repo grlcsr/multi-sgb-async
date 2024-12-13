@@ -32,11 +32,11 @@ impl FtdiBoard {
         }
     }
 
-    pub fn clean_buffer(&mut self) -> Result<(), FtdiBoardStatus> {
+    pub fn clean_buffer(&self) -> Result<(), FtdiBoardStatus> {
         Ok(self.get_device().purge_all()?)
     }
 
-    pub fn get_queue_status(&mut self) -> Result<usize, FtdiBoardStatus> {
+    pub fn get_queue_status(&self) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().queue_status()?)
     }
     
@@ -49,11 +49,30 @@ impl FtdiBoard {
         Ok(board)
     }
 
-    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, FtdiBoardStatus> {
+    pub fn read(&self, buf: &mut [u8]) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().read(buf)?)
     }
 
-    fn device_setup(&mut self) -> Result<(), FtdiBoardStatus> {
+    pub fn read_32_bit_u32(&self) -> Result<u32, FtdiBoardStatus> {
+        let mut buf_32b_u32: [u8; 4] = [0; 4];
+        let _: usize = self.read(&mut buf_32b_u32)?;
+        Ok(u32::from_be_bytes(buf_32b_u32))
+    }
+
+    pub fn write(&self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
+        let mut tdc_command: [u8; 4] = [0; 4];
+        tdc_command[0] = 0xa5;
+        tdc_command[3] = cmd;
+
+        let value_u8: [u8; 2] = value.to_be_bytes();
+        tdc_command[1..3].copy_from_slice(&value_u8[..]);
+
+        println!("TDC command: {:?}", tdc_command);
+
+        Ok(self.get_device().write(&tdc_command)?)
+    }
+
+    fn device_setup(&self) -> Result<(), FtdiBoardStatus> {
         self.get_device().reset()?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x00))?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x40))?;
@@ -62,7 +81,7 @@ impl FtdiBoard {
         Ok(())
     }
 
-    fn get_device(&mut self) -> MutexGuard<'_, Ftdi> {
+    fn get_device(&self) -> MutexGuard<'_, Ftdi> {
         match &self.device {
             Some(arc_mutex) => {
                 arc_mutex.as_ref().lock().expect("Failed to lock device.")

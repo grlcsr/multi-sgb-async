@@ -1,3 +1,12 @@
+use super::ftdi_wrapper::ft_status::FtdiBoardStatus;
+use super::ftdi_wrapper::FtdiBoard;
+use super::write_commands::WriteCommands;
+
+const FLASH_SUCCESS: u32 = 0x00004F4B;
+#[allow(dead_code)]
+const FLASH_FAILURE: u32 = 0x00455252;
+const FLASH_PAGESIZE: usize = 256;
+
 #[derive(Debug, Clone, Copy)]
 pub struct FlashData {
     hv_val: f32,
@@ -16,7 +25,7 @@ impl FlashData {
         Self {
             hv_val,
             dac,
-            ref_temp
+            ref_temp,
         }
     }
 
@@ -42,5 +51,69 @@ impl FlashData {
 
     pub fn set_ref_temp(&mut self, val: f32) {
         self.ref_temp = val;
+    }
+
+    pub fn get_flash_info(
+        device: &FtdiBoard
+    ) -> Result<FlashData, FtdiBoardStatus> {
+        Self::inititialize_flash(device)?;
+        let flash_data_page: [u8; FLASH_PAGESIZE] = Self::req_read_flash(device)?;
+        Ok(Self::decode_flash_read_data(&flash_data_page))
+    }
+
+    fn decode_flash_read_data(read_data: &[u8]) -> FlashData {
+        let mut tmp: [u8; 4] = [0; 4];
+    
+        tmp[1..].copy_from_slice(&read_data[17..20]);
+        let hv_val: f32 = (u32::from_be_bytes(tmp) as f32) / 100.0;
+    
+        tmp[1..].copy_from_slice(&read_data[21..24]);
+        let dac: u32 = u32::from_be_bytes(tmp);
+    
+        tmp[1..].copy_from_slice(&read_data[25..28]);
+        let ref_temp: f32 = (u32::from_be_bytes(tmp) as f32) / 10.0;
+        
+        FlashData::new(hv_val, dac, ref_temp)
+    }
+
+    fn inititialize_flash(device: &FtdiBoard) -> Result<(), FtdiBoardStatus> {
+        let cmd: u8 = WriteCommands::ReqInitFlash as u8;
+        let val: u16 = 0;
+        Self::read_write_cmd_value_and_validate(device, cmd, val)
+    }
+
+    fn read_write_cmd_value_and_validate(
+        device: &FtdiBoard,
+        cmd: u8,
+        val: u16,
+    ) -> Result<(), FtdiBoardStatus> {
+        device.write(cmd, val)?;
+        let command: u8 = (device.read_32_bit_u32()?) as u8;
+
+        if command == cmd {
+            let status: u32 = device.read_32_bit_u32()?;
+
+            if status == FLASH_SUCCESS {
+                Ok(())
+            } else {
+                panic!("FLASH communication: status mismatch.")
+            }
+        } else {
+            panic!("FLASH communication failed: cmd mismatch.")
+        }
+    }
+
+    fn req_read_flash(device: &FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], FtdiBoardStatus> {
+        let cmd: u8 = WriteCommands::ReqReadFlash as u8;
+        let val: u16 = 0;
+        let mut flash_data: [u8; FLASH_PAGESIZE] = [0; FLASH_PAGESIZE];
+
+        match Self::read_write_cmd_value_and_validate(device, cmd, val) {
+            Ok(_) => {
+                let _ = device.read(&mut flash_data);
+                Ok(flash_data)
+            }
+            Err(x) => Err(x),
+        }
     }
 }
