@@ -41,23 +41,12 @@ impl FtdiBoard {
         Ok(self.get_device().queue_status()?)
     }
     
-    pub fn open_with_idx(index: i32) -> Result<FtdiBoard, FtdiBoardStatus> {
-        let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_index(index)?));
-
-        board.device_setup()?;
-        board.clean_buffer()?;
-        
-        //board.flush_device()?; -> remove from here: we need to create out first stream
-        Ok(board)
-    }
-
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
         let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
         board.device_setup()?;
         board.clean_buffer()?;
 
-        //board.flush_device()?;
         Ok(board)
     }
 
