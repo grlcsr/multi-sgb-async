@@ -30,7 +30,6 @@ impl FtdiBoard {
                 device: Some(Arc::new(Mutex::new(t)))
             }
         }
-        
     }
 
     pub fn clean_buffer(&mut self) -> Result<(), FtdiBoardStatus> {
