@@ -1,16 +1,15 @@
-mod base;
 pub(crate) mod global_data;
-pub(crate) mod ftdi_wrapper;
 pub(crate) mod stream_reader;
 
-use std::future::Future;
 use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
-
-use ftdi_wrapper::FtdiBoard;
-use stream_reader::{DeviceStream, StreamResult};
+use std::future::Future;
 use tokio_stream::Stream;
+use std::task::{Context, Poll};
+
+use super::raplibs::ftdi_wrapper::FtdiBoard;
+use super::raplibs::{base, flash::FlashData};
+use stream_reader::{DeviceStream, StreamResult};
 
 enum StreamerState {
     OpenConnection,
@@ -27,8 +26,12 @@ enum StreamerState {
 pub struct SGBStreamer<'a,'b> {
     state: StreamerState,
     serial: String,
+
     board: &'a mut FtdiBoard,
     rx_stream: &'b mut DeviceStream,
+
+    flash_default: FlashData,
+    flash_calib: FlashData,
 
     total_streamed_bytes: usize,
 }
@@ -40,6 +43,9 @@ impl<'a,'b> SGBStreamer<'a,'b> {
             state: StreamerState::OpenConnection,
             board,
             rx_stream,
+
+            flash_default: FlashData::default(),
+            flash_calib: FlashData::default(),
 
             total_streamed_bytes: 0,
         }

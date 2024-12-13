@@ -1,9 +1,9 @@
 use std::pin::Pin;
+use tokio_stream::Stream;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use tokio_stream::Stream;
 
-use super::ftdi_wrapper::FtdiBoard;
+use super::FtdiBoard;
 use super::global_data::BUFFER_SIZE;
 
 #[derive(Debug)]

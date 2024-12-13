@@ -1,9 +1,11 @@
 mod streamer;
+mod raplibs;
 
-use streamer::stream_reader::DeviceStream;
 use tokio::runtime::Runtime;
+
 use streamer::SGBStreamer;
-use streamer::ftdi_wrapper::FtdiBoard;
+use raplibs::ftdi_wrapper::FtdiBoard;
+use streamer::stream_reader::DeviceStream;
 
 fn main() {
 
