@@ -34,6 +34,7 @@ pub struct SGBStreamer<'a, 'b> {
     flash_calib: FlashData,
 
     total_streamed_bytes: usize,
+    v_counter_last: i32,
     flushing: bool,
 }
 
@@ -53,6 +54,7 @@ impl<'a, 'b> SGBStreamer<'a, 'b> {
             flash_calib: FlashData::default(),
 
             total_streamed_bytes: 0,
+            v_counter_last: 0,
             flushing: false,
         }
     }
@@ -60,6 +62,10 @@ impl<'a, 'b> SGBStreamer<'a, 'b> {
     fn flush_device(&mut self) {
         self.rx_stream.set_timeout(Duration::from_secs(1));
         self.flushing = true;
+    }
+
+    fn get_v_counter_last(&mut self) -> &mut i32 {
+        return &mut self.v_counter_last;
     }
 
     fn is_flushing(&self) -> bool {
