@@ -23,35 +23,26 @@ enum StreamerState {
     Termination,
 }
 
-pub struct SGBStreamer<'a, 'b> {
+pub struct SGBStreamer {
     state: StreamerState,
     serial: String,
 
-    board: &'a mut FtdiBoard,
-    rx_stream: &'b mut DeviceStream,
+    rx_stream: DeviceStream,
 
-    flash_default: FlashData,
-    flash_calib: FlashData,
 
     total_streamed_bytes: usize,
     v_counter_last: i32,
     flushing: bool,
 }
 
-impl<'a, 'b> SGBStreamer<'a, 'b> {
+impl SGBStreamer {
     pub fn new(
-        serial: &'static str,
-        board: &'a mut FtdiBoard,
-        rx_stream: &'b mut DeviceStream,
+        serial: &'static str
     ) -> Self {
         Self {
             serial: serial.to_string(),
             state: StreamerState::OpenConnection,
-            board,
-            rx_stream,
-
-            flash_default: FlashData::default(),
-            flash_calib: FlashData::default(),
+            rx_stream: DeviceStream::default(),
 
             total_streamed_bytes: 0,
             v_counter_last: 0,
@@ -64,6 +55,10 @@ impl<'a, 'b> SGBStreamer<'a, 'b> {
         self.flushing = true;
     }
 
+    fn get_stream(&mut self) -> &mut DeviceStream {
+        &mut self.rx_stream
+    }
+
     fn get_v_counter_last(&mut self) -> &mut i32 {
         return &mut self.v_counter_last;
     }
@@ -72,22 +67,25 @@ impl<'a, 'b> SGBStreamer<'a, 'b> {
         self.flushing
     }
 
-    fn open_connection(&mut self) {
-        *self.board = base::open_with_serial(&self.serial).unwrap();
-        *self.rx_stream = DeviceStream::new(self.board.clone());
+    fn open_stream(&mut self) {
+        self.rx_stream = DeviceStream::new(&self.serial);
     }
 }
 
-impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
+impl Future for SGBStreamer {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         loop {
             if self.is_flushing() {
-                while let item = Pin::new(&mut self.rx_stream).poll_next(cx) {
+                while let item = Pin::new(&mut self.get_stream()).poll_next(cx) {
                     match item {
                         Poll::Ready(Some(buf)) => {
+                            println!("Flushing: {:?}", buf.bytes_read);
                             self.total_streamed_bytes += buf.bytes_read;
+
+                            cx.waker().wake_by_ref();
+                            return Poll::Pending;
                         }
                         Poll::Ready(None) => {
                             println!(
@@ -108,7 +106,7 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
             } else {
                 match &self.state {
                     StreamerState::OpenConnection => {
-                        self.open_connection();
+                        self.open_stream();
                         self.flush_device();
 
                         self.state = StreamerState::ReadFlash;
@@ -118,13 +116,7 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
 
                     StreamerState::ReadFlash => {
                         println!("Initializing Flash data.");
-                        let board: &FtdiBoard = &self.board;
-                        let flash_data =
-                            FlashData::get_flash_info(board).expect("Error decoding Flash data.");
-                        self.flash_default = flash_data;
-                        self.flash_calib = flash_data;
-
-                        println!("{:?}", self.flash_default);
+                        self.rx_stream.initialize_flash();
 
                         self.state = StreamerState::PrepareInitialization;
                         cx.waker().wake_by_ref();
@@ -133,7 +125,7 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
 
                     StreamerState::PrepareInitialization => {
                         println!("Preparing Board for initialization.");
-                        base::stop(&mut self.board).unwrap();
+                        self.get_stream().stop_device();
                         self.flush_device();
 
                         self.state = StreamerState::Initalize;
@@ -143,11 +135,7 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
 
                     StreamerState::Initalize => {
                         println!("Initializing Board.");                        
-                        base::check_board_communication(&mut self.board).unwrap();
-
-                        let hv_val = self.flash_default.get_hv();
-                        let dac = self.flash_default.get_dac();
-                        base::initialize_sipm_parameters(&mut self.board, hv_val, dac).unwrap();
+                        self.get_stream().initialize_board();
 
                         todo!("reset_everything_until_ok ---> needs run settings");
 

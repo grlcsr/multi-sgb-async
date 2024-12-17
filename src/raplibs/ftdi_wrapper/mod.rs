@@ -41,7 +41,7 @@ impl FtdiBoard {
     }
     
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
-        let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
+        let board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
         board.device_setup()?;
         board.clean_buffer()?;

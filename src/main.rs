@@ -23,10 +23,10 @@ async fn async_main() {
 
     //TODO spostare openconnection qui e creare lo stream da passare con la connessione aperta
 
-    let mut board = FtdiBoard::default();
-    let mut strim = DeviceStream::default();
+    //let mut board = FtdiBoard::default();
+    //let mut strim = DeviceStream::default();
 
-    let serial_stream = SGBStreamer::new(serial, &mut board, &mut strim);
+    let serial_stream = SGBStreamer::new(serial);
 
     serial_stream.await;
 
