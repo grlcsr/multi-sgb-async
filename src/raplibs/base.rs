@@ -11,7 +11,7 @@ pub fn check_board_communication(device: &mut FtdiBoard) -> Result<(), FtdiBoard
     
     let cmd: u8 = 7;
     let value: u16 = 0x1234;
-    let _ = device.write(cmd, value)?;
+    let _ = device.write_pack(cmd, value)?;
 
     let check_value: u32 = device.read_32_bit_u32()?;
     let fw_version: u32 = device.read_32_bit_u32()?;

@@ -72,6 +72,16 @@ impl FtdiBoard {
         Ok(self.get_device().write(&tdc_command)?)
     }
 
+    pub fn write_pack(&mut self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
+        let cmd1: u8 = FtdiBoard::REQ_WRITE_PACK_FIRST;
+        let cmd2: u8 = FtdiBoard::REQ_WRITE_PACK_SECOND;
+
+        let value1 = cmd as u16;
+
+        self.write(cmd1, value1)?;
+        Ok(self.write(cmd2, value)?)
+    }
+
     fn device_setup(&self) -> Result<(), FtdiBoardStatus> {
         self.get_device().reset()?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x00))?;
