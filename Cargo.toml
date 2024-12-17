@@ -1,9 +1,19 @@
 [package]
-name = "multi-sgb-async"
+name = "multi_sgb_async"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+debug = false
+
 [dependencies]
 libftd2xx = "0.33.1"
-tokio = { version = "1.42", features = ["full"] }
+lazy_static = "1.4.0"
+tokio = { version = "1.44.2", features = ["full"] }
+tokio-util = { version = "0.7.15", features = ["rt"]}
 tokio-stream = "0.1.17"
+
+serde = {version = "1.0.219", features = ["derive", "alloc"] }
+serde_json = {version = "1.0.140"}
+
+serde-big-array = "0.5.1"
