@@ -14,7 +14,8 @@ use stream_reader::{DeviceStream, StreamResult};
 enum StreamerState {
     OpenConnection,
     ReadFlash,
-    Initalization,
+    PrepareInitialization,
+    Initalize,
     TempStabilization,
     ReadStream,
     ReadTests,
@@ -119,13 +120,31 @@ impl<'a, 'b> Future for SGBStreamer<'a, 'b> {
 
                         println!("{:?}", self.flash_default);
 
-                        self.state = StreamerState::Initalization;
+                        self.state = StreamerState::PrepareInitialization;
                         cx.waker().wake_by_ref();
                         return Poll::Pending;
                     }
 
-                    StreamerState::Initalization => {
-                        println!("Initializing Board.");
+                    StreamerState::PrepareInitialization => {
+                        println!("Preparing Board for initialization.");
+                        base::stop(&mut self.board).unwrap();
+                        self.flush_device();
+
+                        self.state = StreamerState::Initalize;
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+
+                    StreamerState::Initalize => {
+                        println!("Initializing Board.");                        
+                        base::check_board_communication(&mut self.board).unwrap();
+
+                        let hv_val = self.flash_default.get_hv();
+                        let dac = self.flash_default.get_dac();
+                        base::initialize_sipm_parameters(&mut self.board, hv_val, dac).unwrap();
+
+                        todo!("reset_everything_until_ok ---> needs run settings");
+
                         return Poll::Ready(());
                     }
 
