@@ -50,7 +50,7 @@ impl DeviceStream {
             flash_default: FlashData::default(),
             flash_calib: FlashData::default(),
             run_settings_local: RunSettings::get_run_settings()
-                                            .expect("Panic initializing DeviceStream: cannot get runsettings."),
+                .expect("Panic initializing DeviceStream: cannot get runsettings."),
 
             timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
