@@ -4,13 +4,22 @@ mod raplibs;
 use tokio::runtime::Runtime;
 
 use streamer::SGBStreamer;
-use raplibs::ftdi_wrapper::FtdiBoard;
-use streamer::stream_reader::DeviceStream;
+use raplibs::settings::RunSettings;
 
 fn main() {
 
     use libftd2xx::list_devices;
     println!("{:?}", list_devices());
+    
+    println!("TEST RUN SETTINGS!");
+    let x = RunSettings::initialize_run_settings();
+    match x {
+        Ok(_) => {
+            println!("INITIALIZED RUN SETTINGS!\nPRINTING RUN SETTINGS:\n");
+            println!("{:?}", RunSettings::get_run_settings().unwrap());
+        },
+        Err(arg) => println!("RUN SETTING INITIALIZATION FAILED! {:?}", arg)
+    }
 
     let runtime: Runtime = Runtime::new().unwrap();
     runtime.block_on(
@@ -20,11 +29,6 @@ fn main() {
 
 async fn async_main() {
     let serial = "RNG46856";
-
-    //TODO spostare openconnection qui e creare lo stream da passare con la connessione aperta
-
-    //let mut board = FtdiBoard::default();
-    //let mut strim = DeviceStream::default();
 
     let serial_stream = SGBStreamer::new(serial);
 

@@ -5,6 +5,7 @@ use tokio_stream::Stream;
 
 use super::global_data::BUFFER_SIZE;
 use super::FtdiBoard;
+use crate::raplibs::settings::RunSettings;
 use crate::raplibs::{base, flash::FlashData};
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
@@ -20,6 +21,7 @@ pub struct DeviceStream {
     board: FtdiBoard,
     flash_default: FlashData,
     flash_calib: FlashData,
+    run_settings_local: RunSettings,
 
     last_poll_time: Instant,
     delay: Duration,
@@ -32,6 +34,7 @@ impl Default for DeviceStream {
             board: FtdiBoard::default(),
             flash_default: FlashData::default(),
             flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::default(),
 
             timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
@@ -46,6 +49,8 @@ impl DeviceStream {
             board: base::open_with_serial(serial_number).unwrap(),
             flash_default: FlashData::default(),
             flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::get_run_settings()
+                                            .expect("Panic initializing DeviceStream: cannot get runsettings."),
 
             timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
@@ -64,7 +69,9 @@ impl DeviceStream {
         let hv_val = self.flash_default.get_hv();
         let dac = self.flash_default.get_dac();
         base::initialize_sipm_parameters(device, hv_val, dac);
-        base::set_tdc_time_threshold(device);
+
+        let afp_threshold: u16 = self.run_settings_local.get_afp_threshold();
+        base::set_tdc_time_threshold(device, afp_threshold);
     }
 
     pub fn initialize_flash(&mut self) {
