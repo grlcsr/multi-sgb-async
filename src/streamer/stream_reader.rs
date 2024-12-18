@@ -28,21 +28,6 @@ pub struct DeviceStream {
     timeout: Duration,
 }
 
-impl Default for DeviceStream {
-    fn default() -> Self {
-        Self {
-            board: FtdiBoard::default(),
-            flash_default: FlashData::default(),
-            flash_calib: FlashData::default(),
-            run_settings_local: RunSettings::default(),
-
-            timeout: Duration::from_secs(1),
-            last_poll_time: Instant::now(),
-            delay: Duration::from_millis(2),
-        }
-    }
-}
-
 impl DeviceStream {
     pub fn new(serial_number: &str) -> Self {
         Self {
@@ -50,7 +35,8 @@ impl DeviceStream {
             flash_default: FlashData::default(),
             flash_calib: FlashData::default(),
             run_settings_local: RunSettings::get_run_settings()
-                .expect("Panic initializing DeviceStream: cannot get runsettings."),
+                .expect("Panic initializing DeviceStream: cannot get runsettings.")
+                .clone(),
 
             timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
@@ -115,6 +101,21 @@ impl Stream for DeviceStream {
                 waker.wake();
             });
             return Poll::Pending;
+        }
+    }
+}
+
+impl Default for DeviceStream {
+    fn default() -> Self {
+        Self {
+            board: FtdiBoard::default(),
+            flash_default: FlashData::default(),
+            flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::default(),
+
+            timeout: Duration::from_secs(1),
+            last_poll_time: Instant::now(),
+            delay: Duration::from_millis(2),
         }
     }
 }

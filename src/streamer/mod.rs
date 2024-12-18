@@ -1,11 +1,11 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
-use std::pin::Pin;
 use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio_stream::Stream;
-use std::task::{Context, Poll};
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
 use super::raplibs::{base, flash::FlashData};
@@ -29,16 +29,13 @@ pub struct SGBStreamer {
 
     rx_stream: DeviceStream,
 
-
     total_streamed_bytes: usize,
     v_counter_last: i32,
     flushing: bool,
 }
 
 impl SGBStreamer {
-    pub fn new(
-        serial: &'static str
-    ) -> Self {
+    pub fn new(serial: &'static str) -> Self {
         Self {
             serial: serial.to_string(),
             state: StreamerState::OpenConnection,
@@ -78,7 +75,8 @@ impl Future for SGBStreamer {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         loop {
             if self.is_flushing() {
-                while let item = Pin::new(&mut self.get_stream()).poll_next(cx) {
+                loop {
+                    let item = Pin::new(&mut self.get_stream()).poll_next(cx);
                     match item {
                         Poll::Ready(Some(buf)) => {
                             println!("Flushing: {:?}", buf.bytes_read);
@@ -101,10 +99,9 @@ impl Future for SGBStreamer {
                         }
                     }
                 }
-
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
-                } else {
+            } else {
                 match &self.state {
                     StreamerState::OpenConnection => {
                         self.open_stream();
@@ -135,7 +132,7 @@ impl Future for SGBStreamer {
                     }
 
                     StreamerState::Initalize => {
-                        println!("Initializing Board.");                        
+                        println!("Initializing Board.");
                         self.get_stream().initialize_board();
 
                         todo!("reset_everything_until_ok ---> needs run settings");

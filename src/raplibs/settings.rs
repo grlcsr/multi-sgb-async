@@ -191,7 +191,7 @@ impl RunSettings {
             .expect("Cannot write run_settings to file.");
     }
 
-    fn check_run_settings_validity(self) {
+    fn check_run_settings_validity(self) -> Result<(), RapLibErrors> {
         let mut msg: String = "".to_string();
         let mut err: bool = false;
 
@@ -254,8 +254,10 @@ impl RunSettings {
         }
 
         if err {
-            panic!("{:}", msg);
+            return Err(RapLibErrors::RunSettingsError(msg.to_string()));
         }
+
+        Ok(())
     }
 }
 
