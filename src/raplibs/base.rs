@@ -36,12 +36,6 @@ pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, RapLibErrors> 
     Ok(FtdiBoard::open_with_serial(serial_number)?)
 }
 
-pub fn set_afp_time_threshold(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
-    let cur_run_settings: RunSettings = RunSettings::get_run_settings()?;
-    let afp_threshold: u16 = cur_run_settings.afp_threshold;
-    set_tdc_time_threshold(device, afp_threshold)
-}
-
 fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetHVDac as u8;
     // Conversion of hv value formula
@@ -53,7 +47,10 @@ fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors>
     }
 }
 
-fn set_tdc_time_threshold(device: &mut FtdiBoard, afp_threshold: u16) -> Result<usize, RapLibErrors> {
+pub fn set_tdc_time_threshold(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
+    let cur_run_settings: RunSettings = RunSettings::get_run_settings()?;
+    let afp_threshold: u16 = cur_run_settings.afp_threshold;
+
     let cmd: u8 = WriteCommands::SetTDCTimeThreshold as u8;
     let value: u16 = afp_threshold;
     Ok(device.write(cmd, value)?)

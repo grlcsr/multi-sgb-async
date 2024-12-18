@@ -7,6 +7,8 @@ use super::global_data::BUFFER_SIZE;
 use super::FtdiBoard;
 use crate::raplibs::{base, flash::FlashData};
 
+// TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
+
 #[derive(Debug)]
 pub struct StreamResult {
     pub buf: [u8; BUFFER_SIZE],
@@ -56,11 +58,13 @@ impl DeviceStream {
     }
 
     pub fn initialize_board(&mut self) {
-        base::check_board_communication(&mut self.board).unwrap();
+        let device = &mut self.board;
+        base::check_board_communication(device);
 
         let hv_val = self.flash_default.get_hv();
         let dac = self.flash_default.get_dac();
-        base::initialize_sipm_parameters(&mut self.board, hv_val, dac).unwrap();
+        base::initialize_sipm_parameters(device, hv_val, dac);
+        base::set_tdc_time_threshold(device);
     }
 
     pub fn initialize_flash(&mut self) {
