@@ -1,10 +1,6 @@
-pub mod ft_status;
-
-use ft_status::*;
 use core::time::Duration;
-use libftd2xx::{BitMode, DeviceInfo, DeviceStatus, Ftdi, FtdiCommon};
+use libftd2xx::{BitMode, Ftdi, FtdiCommon, FtStatus};
 use std::sync::{Arc, Mutex, MutexGuard};
-
 
 #[derive(Debug)]
 pub struct FtdiBoard  {
@@ -96,7 +92,7 @@ impl FtdiBoard {
             Some(arc_mutex) => {
                 arc_mutex.as_ref().lock().expect("Failed to lock device.")
             }
-            None => panic!("No device was found.")
+            None => panic!("Unhandled error: no device initialized!!")
         }
     }
 }
@@ -105,6 +101,19 @@ impl Clone for FtdiBoard {
     fn clone(&self) -> Self {
         FtdiBoard {
             device: self.device.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FtdiBoardStatus {
+    err: String
+}
+
+impl From<FtStatus> for FtdiBoardStatus {
+    fn from(x: FtStatus) -> FtdiBoardStatus {
+        FtdiBoardStatus {
+            err: x.to_string()
         }
     }
 }

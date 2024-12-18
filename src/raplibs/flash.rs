@@ -1,4 +1,4 @@
-use super::ftdi_wrapper::ft_status::FtdiBoardStatus;
+use super::RapLibErrors;
 use super::ftdi_wrapper::FtdiBoard;
 use super::write_commands::WriteCommands;
 
@@ -55,7 +55,7 @@ impl FlashData {
 
     pub fn get_flash_info(
         device: &FtdiBoard
-    ) -> Result<FlashData, FtdiBoardStatus> {
+    ) -> Result<FlashData, RapLibErrors> {
         Self::inititialize_flash(device)?;
         let flash_data_page: [u8; FLASH_PAGESIZE] = Self::req_read_flash(device)?;
         Ok(Self::decode_flash_read_data(&flash_data_page))
@@ -76,7 +76,7 @@ impl FlashData {
         FlashData::new(hv_val, dac, ref_temp)
     }
 
-    fn inititialize_flash(device: &FtdiBoard) -> Result<(), FtdiBoardStatus> {
+    fn inititialize_flash(device: &FtdiBoard) -> Result<(), RapLibErrors> {
         let cmd: u8 = WriteCommands::ReqInitFlash as u8;
         let val: u16 = 0;
         Self::read_write_cmd_value_and_validate(device, cmd, val)
@@ -86,7 +86,7 @@ impl FlashData {
         device: &FtdiBoard,
         cmd: u8,
         val: u16,
-    ) -> Result<(), FtdiBoardStatus> {
+    ) -> Result<(), RapLibErrors> {
         device.write(cmd, val)?;
         let command: u8 = (device.read_32_bit_u32()?) as u8;
 
@@ -96,14 +96,14 @@ impl FlashData {
             if status == FLASH_SUCCESS {
                 Ok(())
             } else {
-                panic!("FLASH communication: status mismatch.")
+                Err(RapLibErrors::FlashError("FLASH communication: status mismatch.".to_string()))
             }
         } else {
-            panic!("FLASH communication failed: cmd mismatch.")
+            Err(RapLibErrors::FlashError("FLASH communication failed: cmd mismatch.".to_string()))
         }
     }
 
-    fn req_read_flash(device: &FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], FtdiBoardStatus> {
+    fn req_read_flash(device: &FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], RapLibErrors> {
         let cmd: u8 = WriteCommands::ReqReadFlash as u8;
         let val: u16 = 0;
         let mut flash_data: [u8; FLASH_PAGESIZE] = [0; FLASH_PAGESIZE];
@@ -113,7 +113,7 @@ impl FlashData {
                 let _ = device.read(&mut flash_data);
                 Ok(flash_data)
             }
-            Err(x) => Err(x),
+            Err(x) => Err(RapLibErrors::FlashError(x.to_string())),
         }
     }
 }

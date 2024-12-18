@@ -7,3 +7,5 @@ edition = "2021"
 libftd2xx = "0.33.1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1.17"
+binext = "1.0.0"
+lazy_static = "1.4.0"

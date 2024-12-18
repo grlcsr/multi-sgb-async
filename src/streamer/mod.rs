@@ -101,9 +101,10 @@ impl Future for SGBStreamer {
                         }
                     }
                 }
+
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
-            } else {
+                } else {
                 match &self.state {
                     StreamerState::OpenConnection => {
                         self.open_stream();
