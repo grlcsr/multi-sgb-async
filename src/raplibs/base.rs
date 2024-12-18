@@ -17,12 +17,12 @@ pub fn check_board_communication(device: &mut FtdiBoard) -> Result<(), RapLibErr
 
     if check_value == CHECK_VALUE && fw_version >= MIN_SUPPORTED_FIRMWARE_VERSION {
         println!("Communication OK: got value {:#010x}", check_value);
-        println!("Firmware {:?} supported: minimum version required: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION);
+        println!("Firmware {:?} supported: minimum version required: {:?}, software version: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION);
         Ok(())
     } else if check_value != CHECK_VALUE {
-        panic!("Communication NOT OK: received check_value: {:#010x} expected value: {:#010x}", check_value, CHECK_VALUE);
+        Err(RapLibErrors::BaseError(format!("Communication NOT OK: received check_value: {:#010x} expected value: {:#010x}", check_value, CHECK_VALUE)))
     } else {
-        panic!("Firmware {:?} NOT SUPPORTED: minimum version required: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION);
+        Err(RapLibErrors::BaseError(format!("Firmware {:?} NOT SUPPORTED: minimum version required: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION)))
     }
 }
 
@@ -43,7 +43,7 @@ fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors>
     if value > 0 {
         Ok(device.write(cmd, value)?)
     } else {
-        panic!("HV Value too small: {:?}", value);
+        Err(RapLibErrors::BaseError(format!("HV Value too small: {:?}", value)))
     }
 }
 
