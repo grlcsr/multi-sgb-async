@@ -14,9 +14,6 @@ impl Default for FtdiBoard {
 }
 
 impl FtdiBoard {
-    const REQ_WRITE_PACK_FIRST: u8 = 0xFE;
-    const REQ_WRITE_PACK_SECOND: u8 = 0xFF;
-
     pub fn new(t: Option<Ftdi>) -> Self {        
         match t {
             None => Self {
@@ -63,19 +60,9 @@ impl FtdiBoard {
         let value_u8: [u8; 2] = value.to_be_bytes();
         tdc_command[1..3].copy_from_slice(&value_u8[..]);
 
-        println!("TDC command: {:?}", tdc_command);
+        //println!("TDC command: {:?}", tdc_command);
 
         Ok(self.get_device().write(&tdc_command)?)
-    }
-
-    pub fn write_pack(&mut self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
-        let cmd1: u8 = FtdiBoard::REQ_WRITE_PACK_FIRST;
-        let cmd2: u8 = FtdiBoard::REQ_WRITE_PACK_SECOND;
-
-        let value1 = cmd as u16;
-
-        self.write(cmd1, value1)?;
-        Ok(self.write(cmd2, value)?)
     }
 
     fn device_setup(&self) -> Result<(), FtdiBoardStatus> {

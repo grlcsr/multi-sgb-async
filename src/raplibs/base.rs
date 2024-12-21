@@ -7,10 +7,14 @@ pub const SOFTWARE_VERSION: u32 = 23061401;
 pub const MIN_SUPPORTED_FIRMWARE_VERSION: u32 = 23060802;
 pub const CHECK_VALUE: u32 = 0xabcd1234;
 
+const REQ_WRITE_PACK_FIRST: u8 = 0xFE;
+const REQ_WRITE_PACK_SECOND: u8 = 0xFF;
+
+
 pub fn check_board_communication(device: &mut FtdiBoard) -> Result<(), RapLibErrors> {
     let cmd: u8 = 7;
     let value: u16 = 0x1234;
-    let _ = device.write_pack(cmd, value)?;
+    let _ = write_pack(device, cmd, value)?;
 
     let check_value: u32 = device.read_32_bit_u32()?;
     let fw_version: u32 = device.read_32_bit_u32()?;
@@ -34,6 +38,21 @@ pub fn initialize_sipm_parameters(device: &mut FtdiBoard, hv_val: f32, dac_val: 
 
 pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, RapLibErrors> {
     Ok(FtdiBoard::open_with_serial(serial_number)?)
+}
+
+pub fn reset_rap_values(device: &mut FtdiBoard, reset_tdc: bool, reset_mono: bool, reset_sha256: bool) -> Result<usize, RapLibErrors> {
+    let cmd: u8 = 5;
+    let mut value: u16 = 0;
+    if reset_sha256 {
+        value += 1;
+    }
+    if reset_mono {
+        value += 2;
+    }
+    if reset_tdc {
+        value += 4;
+    }
+    Ok(write_pack(device, cmd, value)?)
 }
 
 fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
@@ -63,4 +82,14 @@ pub fn stop(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqStop as u8;
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
+}
+
+pub fn write_pack(device: &mut FtdiBoard, cmd: u8, value: u16) -> Result<usize, RapLibErrors> {
+    let cmd1: u8 = REQ_WRITE_PACK_FIRST;
+    let cmd2: u8 = REQ_WRITE_PACK_SECOND;
+
+    let value1 = cmd as u16;
+
+    device.write(cmd1, value1)?;
+    Ok(device.write(cmd2, value)?)
 }

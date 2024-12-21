@@ -75,32 +75,29 @@ impl Future for SGBStreamer {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         loop {
             if self.is_flushing() {
-                loop {
-                    let item = Pin::new(&mut self.get_stream()).poll_next(cx);
-                    match item {
-                        Poll::Ready(Some(buf)) => {
-                            println!("Flushing: {:?}", buf.bytes_read);
-                            self.total_streamed_bytes += buf.bytes_read;
+                let item = Pin::new(&mut self.get_stream()).poll_next(cx);
+                match item {
+                    Poll::Ready(Some(buf)) => {
+                        //println!("Flushing: {:?}", buf.bytes_read);
+                        self.total_streamed_bytes += buf.bytes_read;
 
-                            cx.waker().wake_by_ref();
-                            return Poll::Pending;
-                        }
-                        Poll::Ready(None) => {
-                            println!(
-                                "Flushing complete. Flushed {} bytes.",
-                                self.total_streamed_bytes
-                            );
-                            self.flushing = false;
-                            break;
-                        }
-                        Poll::Pending => {
-                            cx.waker().wake_by_ref();
-                            return Poll::Pending;
-                        }
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                    Poll::Ready(None) => {
+                        println!(
+                            "Flushing complete. Flushed {} bytes.",
+                            self.total_streamed_bytes
+                        );
+                        self.flushing = false;
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                    Poll::Pending => {
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
                     }
                 }
-                cx.waker().wake_by_ref();
-                return Poll::Pending;
             } else {
                 match &self.state {
                     StreamerState::OpenConnection => {

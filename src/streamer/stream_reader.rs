@@ -8,6 +8,9 @@ use super::FtdiBoard;
 use crate::raplibs::settings::RunSettings;
 use crate::raplibs::{base, flash::FlashData};
 
+// From v_counter after reset if there is no hardware error (found experimentally, no idea why)
+pub const FRESH_NIBBLES_AFTER_RESET: i32 = 8188;
+
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
 
 #[derive(Debug)]
@@ -69,8 +72,16 @@ impl DeviceStream {
         println!("{:?}", self.flash_default);
     }
 
+    pub fn reset_rap_values(&mut self, reset_tdc: bool, reset_mono: bool, reset_sha256: bool) {
+        base::reset_rap_values(&mut self.board, reset_tdc, reset_mono, reset_sha256);
+    }
+
     pub fn stop_device(&mut self) {
         base::stop(&mut self.board).unwrap();
+    }
+
+    pub fn write_pack(&mut self, cmd: u8, value: u16) {
+        base::write_pack(&mut self.board, cmd, value);
     }
 }
 
