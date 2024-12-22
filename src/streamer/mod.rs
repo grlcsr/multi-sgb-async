@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio_stream::Stream;
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
-use stream_reader::{DeviceStream, StreamResult};
+use stream_reader::{SGBStreamer, StreamResult};
 
 enum StreamerState {
     OpenConnection,
@@ -24,11 +24,11 @@ enum StreamerState {
     Termination,
 }
 
-pub struct SGBStreamer {
+pub struct SingleGeneratorBoardFSM {
     state: StreamerState,
     serial: String,
 
-    rx_stream: DeviceStream,
+    rx_stream: SGBStreamer,
 
     total_streamed_bytes: usize,
     flushing: bool,
@@ -38,12 +38,12 @@ pub struct SGBStreamer {
     nibble_polls: u8
 }
 
-impl SGBStreamer {
+impl SingleGeneratorBoardFSM {
     pub fn new(serial: &'static str) -> Self {
         Self {
             serial: serial.to_string(),
             state: StreamerState::OpenConnection,
-            rx_stream: DeviceStream::default(),
+            rx_stream: SGBStreamer::default(),
 
             total_streamed_bytes: 0,
             flushing: false,
@@ -60,7 +60,7 @@ impl SGBStreamer {
         self.flushing = true;
     }
 
-    fn get_stream(&mut self) -> &mut DeviceStream {
+    fn get_stream(&mut self) -> &mut SGBStreamer {
         &mut self.rx_stream
     }
 
@@ -121,7 +121,7 @@ impl SGBStreamer {
     }
 
     fn open_stream(&mut self) {
-        self.rx_stream = DeviceStream::new(&self.serial);
+        self.rx_stream = SGBStreamer::new(&self.serial);
     }
 
     fn set_wait_end_of_generation(&mut self) {
@@ -139,7 +139,7 @@ impl SGBStreamer {
     }
 }
 
-impl Future for SGBStreamer {
+impl Future for SingleGeneratorBoardFSM {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
@@ -196,7 +196,11 @@ impl Future for SGBStreamer {
                         self.get_stream().reset_rap_values(true, true, true);
                         self.set_wait_end_of_generation();
                         self.nibble_polls += 1;
+                        if self.nibble_polls >= 5 {
+                            panic!("Can't reset board to known state.");
+                        }
                     } else {
+                        self.nibble_polls = 0;
                         self.state = StreamerState::TempStabilization;
                     }
 

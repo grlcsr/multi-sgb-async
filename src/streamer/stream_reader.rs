@@ -17,7 +17,7 @@ pub struct StreamResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct DeviceStream {
+pub struct SGBStreamer {
     board: FtdiBoard,
     flash_default: FlashData,
     flash_calib: FlashData,
@@ -30,7 +30,7 @@ pub struct DeviceStream {
     read_32_bits_stream: bool,
 }
 
-impl Default for DeviceStream {
+impl Default for SGBStreamer {
     fn default() -> Self {
         Self {
             board: FtdiBoard::default(),
@@ -46,7 +46,7 @@ impl Default for DeviceStream {
     }
 }
 
-impl DeviceStream {
+impl SGBStreamer {
     pub fn new(serial_number: &str) -> Self {
         Self {
             board: base::open_with_serial(serial_number).unwrap(),
@@ -111,7 +111,7 @@ impl DeviceStream {
     }
 }
 
-impl Stream for DeviceStream {
+impl Stream for SGBStreamer {
     type Item = StreamResult;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

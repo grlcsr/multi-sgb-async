@@ -3,7 +3,7 @@ mod raplibs;
 
 use tokio::runtime::Runtime;
 
-use streamer::SGBStreamer;
+use streamer::SingleGeneratorBoardFSM;
 use raplibs::settings::RunSettings;
 
 fn main() {
@@ -30,7 +30,7 @@ fn main() {
 async fn async_main() {
     let serial = "RNG46856";
 
-    let serial_stream = SGBStreamer::new(serial);
+    let serial_stream = SingleGeneratorBoardFSM::new(serial);
 
     serial_stream.await;
 
