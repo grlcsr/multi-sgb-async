@@ -3,19 +3,16 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio_stream::Stream;
 
-use super::global_data::BUFFER_SIZE;
+use super::global_data::*;
 use super::FtdiBoard;
 use crate::raplibs::settings::RunSettings;
 use crate::raplibs::{base, flash::FlashData};
-
-// From v_counter after reset if there is no hardware error (found experimentally, no idea why)
-pub const FRESH_NIBBLES_AFTER_RESET: i32 = 8188;
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
 
 #[derive(Debug)]
 pub struct StreamResult {
-    pub buf: [u8; BUFFER_SIZE],
+    pub buf: Vec<u8>,
     pub bytes_read: usize,
 }
 
@@ -29,26 +26,35 @@ pub struct DeviceStream {
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
+
+    read_32_bits_stream: bool,
+}
+
+impl Default for DeviceStream {
+    fn default() -> Self {
+        Self {
+            board: FtdiBoard::default(),
+            flash_default: FlashData::default(),
+            flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::default(),
+
+            timeout: Duration::from_secs(1),
+            last_poll_time: Instant::now(),
+            delay: Duration::from_millis(1),
+            read_32_bits_stream: false,
+        }
+    }
 }
 
 impl DeviceStream {
     pub fn new(serial_number: &str) -> Self {
         Self {
             board: base::open_with_serial(serial_number).unwrap(),
-            flash_default: FlashData::default(),
-            flash_calib: FlashData::default(),
             run_settings_local: RunSettings::get_run_settings()
                 .expect("Panic initializing DeviceStream: cannot get runsettings.")
                 .clone(),
-
-            timeout: Duration::from_secs(1),
-            last_poll_time: Instant::now(),
-            delay: Duration::from_millis(2),
+            ..Default::default()
         }
-    }
-
-    pub fn set_timeout(&mut self, timeout: Duration) {
-        self.timeout = timeout;
     }
 
     pub fn initialize_board(&mut self) {
@@ -72,8 +78,28 @@ impl DeviceStream {
         println!("{:?}", self.flash_default);
     }
 
+    pub fn is_read_32_bits_stream(&self) -> bool {
+        self.read_32_bits_stream
+    }
+
     pub fn reset_rap_values(&mut self, reset_tdc: bool, reset_mono: bool, reset_sha256: bool) {
         base::reset_rap_values(&mut self.board, reset_tdc, reset_mono, reset_sha256);
+    }
+
+    pub fn set_last_poll_time(&mut self) {
+        self.last_poll_time = Instant::now();
+    }
+
+    pub fn set_read_32_bits_stream(&mut self, val: bool) {
+        self.read_32_bits_stream = val;
+    }
+
+    pub fn set_delay(&mut self, delay: Duration) {
+        self.delay = delay;
+    }
+
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 
     pub fn stop_device(&mut self) {
@@ -99,34 +125,34 @@ impl Stream for DeviceStream {
         have correct buffer sizes for raw data stream
         */
 
-        if self.board.get_queue_status().unwrap() > 0 {
-            let mut buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-            let bytes_read = self.board.read(&mut buf).unwrap();
-            self.last_poll_time = Instant::now();
+        let buf: Vec<u8>;
+        let bytes_read: usize;
+
+        if self.is_read_32_bits_stream() {
+            let mut read_buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+            bytes_read = self.board.read(&mut read_buf).unwrap();
+            buf = read_buf.to_vec();
+
+            self.set_last_poll_time();
             return Poll::Ready(Some(StreamResult { buf, bytes_read }));
-        } else {
+        } else if self.board.get_queue_status().unwrap() > 0 {
+            let mut read_buf: [u8; BUFFER_SIZE_32_BITS] = [0; BUFFER_SIZE_32_BITS];
+            println!("ee\t{:?}", self.board.get_status().unwrap());
+            bytes_read = self.board.read(&mut read_buf).unwrap();
+            buf = read_buf.to_vec();
+
+            self.set_last_poll_time();
+            return Poll::Ready(Some(StreamResult { buf, bytes_read }));
+        }
+
+        if self.delay > Duration::from_millis(0) {
             let waker = cx.waker().clone();
             let delay = self.delay;
             tokio::spawn(async move {
                 tokio::time::sleep(delay).await;
                 waker.wake();
             });
-            return Poll::Pending;
         }
-    }
-}
-
-impl Default for DeviceStream {
-    fn default() -> Self {
-        Self {
-            board: FtdiBoard::default(),
-            flash_default: FlashData::default(),
-            flash_calib: FlashData::default(),
-            run_settings_local: RunSettings::default(),
-
-            timeout: Duration::from_secs(1),
-            last_poll_time: Instant::now(),
-            delay: Duration::from_millis(2),
-        }
+        return Poll::Pending;
     }
 }

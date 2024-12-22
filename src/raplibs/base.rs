@@ -1,5 +1,4 @@
 use super::RapLibErrors;
-use super::settings::RunSettings;
 use super::write_commands::WriteCommands;
 use super::ftdi_wrapper::FtdiBoard;
 

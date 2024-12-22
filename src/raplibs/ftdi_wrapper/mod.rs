@@ -1,5 +1,5 @@
 use core::time::Duration;
-use libftd2xx::{BitMode, Ftdi, FtdiCommon, FtStatus};
+use libftd2xx::{BitMode, DeviceStatus, FtStatus, Ftdi, FtdiCommon};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 #[derive(Debug)]
@@ -31,6 +31,10 @@ impl FtdiBoard {
 
     pub fn get_queue_status(&self) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().queue_status()?)
+    }
+
+    pub fn get_status(&self) -> Result<DeviceStatus, FtdiBoardStatus> {
+        Ok(self.get_device().status()?)
     }
     
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
