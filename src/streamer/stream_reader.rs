@@ -1,7 +1,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use tokio_stream::Stream;
+use tokio_stream::{Stream, StreamExt};
 
 use super::global_data::*;
 use super::FtdiBoard;
@@ -197,6 +197,64 @@ impl Stream for SGBStreamer {
                 waker.wake();
             });
         }
+        return Poll::Pending;
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct FlushDevice<'a> {
+    board: &'a FtdiBoard,
+
+    last_poll_time: Instant,
+    timeout: Duration,
+}
+
+impl<'a> FlushDevice<'a> {
+    pub fn new(board: &'a FtdiBoard, timeout: Duration) -> Self {
+        Self {
+            board,
+            timeout,
+            last_poll_time: Instant::now(),
+        }
+    }
+
+    async fn flush_device(&mut self) -> usize {
+        let mut total_cleaned_bytes: usize = 0;
+
+        loop {
+            match self.next().await { //TODO! Change to try next and return Result<usize, Err>
+                Some(read_bytes) => total_cleaned_bytes += read_bytes,
+                None => break,
+            }
+        }
+
+        return total_cleaned_bytes;
+    }
+
+    fn set_last_poll_time(&mut self) {
+        self.last_poll_time = Instant::now();
+    }
+}
+
+impl<'a> Stream for FlushDevice<'a> {
+    type Item = usize;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if Instant::now().duration_since(self.last_poll_time) > self.timeout {
+            println!("Cleaning buffer: Timeout exceeded!!");
+            return Poll::Ready(None);
+        }
+
+        if self.board.get_queue_status().unwrap() > 0 {
+            let mut read_buf: [u8; BUFFER_SIZE_FLUSHING] = [0; BUFFER_SIZE_FLUSHING];
+
+            let bytes_read = self.board.read(&mut read_buf).unwrap();
+
+            self.set_last_poll_time();
+            return Poll::Ready(Some(bytes_read));
+        }
+
         return Poll::Pending;
     }
 }
