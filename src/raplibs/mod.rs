@@ -1,8 +1,10 @@
 pub(crate) mod ftdi_wrapper;
 pub(crate) mod base;
 pub(crate) mod flash;
+pub(crate) mod sanity_checks;
 pub(crate) mod write_commands;
 pub(crate) mod settings;
+pub(crate) mod sha256;
 
 use std::fmt;
 use std::io::Error;

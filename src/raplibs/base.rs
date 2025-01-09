@@ -1,6 +1,6 @@
 use super::RapLibErrors;
-use super::write_commands::WriteCommands;
 use super::ftdi_wrapper::FtdiBoard;
+use super::write_commands::WriteCommands;
 
 pub const SOFTWARE_VERSION: u32 = 23061401;
 pub const MIN_SUPPORTED_FIRMWARE_VERSION: u32 = 23060802;
@@ -39,6 +39,32 @@ pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, RapLibErrors> 
     Ok(FtdiBoard::open_with_serial(serial_number)?)
 }
 
+pub fn req_temperature(device: &mut FtdiBoard) -> Result<f32, RapLibErrors> {
+    let cmd: u8 = WriteCommands::ReqTemperature as u8;
+    let value: u16 = 0;
+    device.write(cmd, value)?;
+    let temperature_dac: u32 = device.read_32_bit_u32()?;
+    
+    let temperature: f32 = if temperature_dac <= 2048 {
+        (128.0 / 2048.0) * temperature_dac as f32
+    } else {
+        -(128.0 / 2048.0) * (4096.0 - temperature_dac as f32)
+    };
+
+    if !(-20.0..=100.0).contains(&temperature) {
+        let msg: String = format!("Read temperature error: temp measured = {:?}.", temperature);
+        Err(RapLibErrors::BaseError(msg))
+    } else {
+        Ok(temperature)
+    }
+}
+
+pub fn reset_fail_flag_latch(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
+    let cmd: u8 = WriteCommands::ResetFailFlagLatch as u8;
+    let value: u16 = 1;
+    Ok(device.write(cmd, value)?)
+}
+
 pub fn reset_rap_values(device: &mut FtdiBoard, reset_tdc: bool, reset_mono: bool, reset_sha256: bool) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 5;
     let mut value: u16 = 0;
@@ -52,6 +78,11 @@ pub fn reset_rap_values(device: &mut FtdiBoard, reset_tdc: bool, reset_mono: boo
         value += 4;
     }
     Ok(write_pack(device, cmd, value)?)
+}
+
+pub fn set_gate_dcr(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+    let cmd: u8 = WriteCommands::SetGateDCR as u8;
+    Ok(device.write(cmd, value)?)
 }
 
 fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
