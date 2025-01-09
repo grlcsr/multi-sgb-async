@@ -1,15 +1,10 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
-use global_data::FRESH_NIBBLES_AFTER_RESET;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio_stream::Stream;
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
-use stream_reader::{SGBStreamer, StreamResult};
+use crate::raplibs::{base, flash::FlashData, sanity_checks, settings::RunSettings, sha256};
 
 enum StreamerState {
     OpenConnection,
@@ -26,34 +21,40 @@ enum StreamerState {
 }
 
 pub struct SingleGeneratorBoardFSM {
-    state: StreamerState,
-    serial: String,
+    serial_number: String,
+    board: FtdiBoard,
 
-    rx_stream: SGBStreamer,
-
-    total_streamed_bytes: usize,
-
-    waiting_end_of_generation: bool,
-    v_counter_last: i32,
-    nibble_polls: u8,
+    flash_default: FlashData,
+    flash_calib: FlashData,
+    run_settings_local: RunSettings,
 }
 
 impl SingleGeneratorBoardFSM {
     pub fn new(serial: &'static str) -> Self {
         Self {
-            serial: serial.to_string(),
-            state: StreamerState::OpenConnection,
-            rx_stream: SGBStreamer::default(),
-
-            total_streamed_bytes: 0,
-
-            waiting_end_of_generation: false,
-            v_counter_last: 0,
-            nibble_polls: 0,
+            serial_number: serial.to_string(),
+            ..Default::default()
         }
     }
-    
-    fn get_stream(&mut self) -> &mut SGBStreamer {
+
+    async fn open_connection(&mut self) {
+        self.board = base::open_with_serial(&self.serial_number).unwrap();
+        self.run_settings_local = RunSettings::get_run_settings()
+            .expect("Panic initializing DeviceStream: cannot get runsettings.")
+            .clone();
+
+        let _timeout = Duration::from_secs(1);
+        let flushed_bytes = stream_reader::FlushDevice::new(&self.board, _timeout).flush_device().await;
+
+        println!("Connection Opened. Flushed {flushed_bytes} bytes!");
+    }
+
+    async fn read_flash(&mut self) {
+        println!("Initializing Flash data.");
+                    self.rx_stream.initialize_flash();
+    }
+
+    /*fn get_stream(&mut self) -> &mut SGBStreamer {
         &mut self.rx_stream
     }
 
@@ -131,10 +132,10 @@ impl SingleGeneratorBoardFSM {
 
     fn reset_total_streamed_bytes(&mut self) {
         self.total_streamed_bytes = 0;
-    }
+    }*/
 }
 
-impl Future for SingleGeneratorBoardFSM {
+/*impl Future for SingleGeneratorBoardFSM {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
@@ -239,6 +240,21 @@ impl Future for SingleGeneratorBoardFSM {
                 StreamerState::TempCompensation => todo!(),
                 StreamerState::Termination => todo!(),
             }
+        }
+    }
+}
+*/
+
+
+
+impl Default for SingleGeneratorBoardFSM {
+    fn default() -> Self {
+        Self {
+            serial_number: "defalt".to_string(),
+            board: FtdiBoard::default(),
+            flash_default: FlashData::default(),
+            flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::default(),
         }
     }
 }

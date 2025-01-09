@@ -219,7 +219,7 @@ impl<'a> FlushDevice<'a> {
         }
     }
 
-    async fn flush_device(&mut self) -> usize {
+    pub async fn flush_device(&mut self) -> usize {
         let mut total_cleaned_bytes: usize = 0;
 
         loop {
