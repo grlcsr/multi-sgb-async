@@ -1,6 +1,6 @@
-use super::RapLibErrors;
 use super::ftdi_wrapper::FtdiBoard;
 use super::write_commands::WriteCommands;
+use super::RapLibErrors;
 
 pub const SOFTWARE_VERSION: u32 = 23061401;
 pub const MIN_SUPPORTED_FIRMWARE_VERSION: u32 = 23060802;
@@ -8,7 +8,6 @@ pub const CHECK_VALUE: u32 = 0xabcd1234;
 
 const REQ_WRITE_PACK_FIRST: u8 = 0xFE;
 const REQ_WRITE_PACK_SECOND: u8 = 0xFF;
-
 
 pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors> {
     let cmd: u8 = 7;
@@ -20,16 +19,29 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
 
     if check_value == CHECK_VALUE && fw_version >= MIN_SUPPORTED_FIRMWARE_VERSION {
         println!("Communication OK: got value {:#010x}", check_value);
-        println!("Firmware {:?} supported: minimum version required: {:?}, software version: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION);
+        println!(
+            "Firmware {:?} supported: minimum version required: {:?}, software version: {:?}.",
+            fw_version, MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION
+        );
         Ok(())
     } else if check_value != CHECK_VALUE {
-        Err(RapLibErrors::BaseError(format!("Communication NOT OK: received check_value: {:#010x} expected value: {:#010x}", check_value, CHECK_VALUE)))
+        Err(RapLibErrors::BaseError(format!(
+            "Communication NOT OK: received check_value: {:#010x} expected value: {:#010x}",
+            check_value, CHECK_VALUE
+        )))
     } else {
-        Err(RapLibErrors::BaseError(format!("Firmware {:?} NOT SUPPORTED: minimum version required: {:?}.", fw_version, MIN_SUPPORTED_FIRMWARE_VERSION)))
+        Err(RapLibErrors::BaseError(format!(
+            "Firmware {:?} NOT SUPPORTED: minimum version required: {:?}.",
+            fw_version, MIN_SUPPORTED_FIRMWARE_VERSION
+        )))
     }
 }
 
-pub fn initialize_sipm_parameters(device: &FtdiBoard, hv_val: f32, dac_val: u32) -> Result<(), RapLibErrors> {
+pub fn initialize_sipm_parameters(
+    device: &FtdiBoard,
+    hv_val: f32,
+    dac_val: u32,
+) -> Result<(), RapLibErrors> {
     let _ = set_hvdac(device, hv_val)?;
     let _ = set_thdac(device, dac_val)?;
     Ok(())
@@ -50,7 +62,7 @@ pub fn req_temperature(device: &FtdiBoard) -> Result<f32, RapLibErrors> {
     let value: u16 = 0;
     device.write(cmd, value)?;
     let temperature_dac: u32 = device.read_32_bit_u32()?;
-    
+
     let temperature: f32 = if temperature_dac <= 2048 {
         (128.0 / 2048.0) * temperature_dac as f32
     } else {
@@ -71,7 +83,12 @@ pub fn reset_fail_flag_latch(device: &FtdiBoard) -> Result<usize, RapLibErrors> 
     Ok(device.write(cmd, value)?)
 }
 
-pub fn reset_rap_values(device: &FtdiBoard, reset_tdc: bool, reset_mono: bool, reset_sha256: bool) -> Result<usize, RapLibErrors> {
+pub fn reset_rap_values(
+    device: &FtdiBoard,
+    reset_tdc: bool,
+    reset_mono: bool,
+    reset_sha256: bool,
+) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 5;
     let mut value: u16 = 0;
     if reset_sha256 {
@@ -98,11 +115,17 @@ fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
     if value > 0 {
         Ok(device.write(cmd, value)?)
     } else {
-        Err(RapLibErrors::BaseError(format!("HV Value too small: {:?}", value)))
+        Err(RapLibErrors::BaseError(format!(
+            "HV Value too small: {:?}",
+            value
+        )))
     }
 }
 
-pub fn set_tdc_time_threshold(device: &FtdiBoard, afp_threshold: u16) -> Result<usize, RapLibErrors> {
+pub fn set_tdc_time_threshold(
+    device: &FtdiBoard,
+    afp_threshold: u16,
+) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetTDCTimeThreshold as u8;
     let value: u16 = afp_threshold;
     Ok(device.write(cmd, value)?)

@@ -3,7 +3,7 @@ use libftd2xx::{BitMode, DeviceStatus, FtStatus, Ftdi, FtdiCommon};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 #[derive(Debug)]
-pub struct FtdiBoard  {
+pub struct FtdiBoard {
     device: Option<Arc<Mutex<Ftdi>>>,
 }
 
@@ -14,14 +14,12 @@ impl Default for FtdiBoard {
 }
 
 impl FtdiBoard {
-    pub fn new(t: Option<Ftdi>) -> Self {        
+    pub fn new(t: Option<Ftdi>) -> Self {
         match t {
-            None => Self {
-                device: None
-            },
+            None => Self { device: None },
             Some(t) => Self {
-                device: Some(Arc::new(Mutex::new(t)))
-            }
+                device: Some(Arc::new(Mutex::new(t))),
+            },
         }
     }
 
@@ -36,7 +34,7 @@ impl FtdiBoard {
     pub fn get_status(&self) -> Result<DeviceStatus, FtdiBoardStatus> {
         Ok(self.get_device().status()?)
     }
-    
+
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
         let board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
@@ -74,16 +72,15 @@ impl FtdiBoard {
         self.get_device().set_bit_mode(0xff, BitMode::from(0x00))?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x40))?;
         self.get_device().set_flow_control_rts_cts()?;
-        self.get_device().set_timeouts(Duration::from_millis(250), Duration::from_millis(250))?;
+        self.get_device()
+            .set_timeouts(Duration::from_millis(250), Duration::from_millis(250))?;
         Ok(())
     }
 
     fn get_device(&self) -> MutexGuard<'_, Ftdi> {
         match &self.device {
-            Some(arc_mutex) => {
-                arc_mutex.as_ref().lock().expect("Failed to lock device.")
-            }
-            None => panic!("Unhandled error: no device initialized!!")
+            Some(arc_mutex) => arc_mutex.as_ref().lock().expect("Failed to lock device."),
+            None => panic!("Unhandled error: no device initialized!!"),
         }
     }
 }
@@ -98,13 +95,11 @@ impl Clone for FtdiBoard {
 
 #[derive(Debug)]
 pub struct FtdiBoardStatus {
-    err: String
+    err: String,
 }
 
 impl From<FtStatus> for FtdiBoardStatus {
     fn from(x: FtStatus) -> FtdiBoardStatus {
-        FtdiBoardStatus {
-            err: x.to_string()
-        }
+        FtdiBoardStatus { err: x.to_string() }
     }
 }

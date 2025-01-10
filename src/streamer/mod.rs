@@ -18,10 +18,10 @@ enum StreamerState {
     Initalize,
     TempStabilization,
     WriteSettings,
-    /*ReadStream,
+    ReadStream,
     ReadTests,
     TempCompensation,
-    Termination,*/
+    Termination,
 }
 
 pub struct SingleGeneratorBoardFSM {
@@ -80,27 +80,24 @@ impl SingleGeneratorBoardFSM {
                     self.perform_temperature_stabilization().await;
 
                     self.state = StreamerState::WriteSettings;
-                } 
-                
+                }
+
                 StreamerState::WriteSettings => {
                     println!("Writing settings to device.");
-                      self.write_run_settings_to_device();
-                      base::reset_rap_values(&self.board, true, true, true);
-                      self.flush_device().await;
-                      self.wait_for_end_of_generation().await;
+                    self.write_run_settings_to_device();
+                    base::reset_rap_values(&self.board, true, true, true);
+                    self.flush_device().await;
+                    self.wait_for_end_of_generation().await;
 
-                      break;
+                    self.state = StreamerState::ReadStream;
+                }
 
-                      //self.state = StreamerState::ReadStream;
-
-                  }
-
-                  /*StreamerState::ReadStream => {
-                      return Poll::Ready(());
-                  }
-                  StreamerState::ReadTests => todo!(),
-                  StreamerState::TempCompensation => todo!(),
-                  StreamerState::Termination => todo!(),*/
+                StreamerState::ReadStream => {
+                    todo!()
+                }
+                StreamerState::ReadTests => todo!(),
+                StreamerState::TempCompensation => todo!(),
+                StreamerState::Termination => todo!(),
             }
         }
     }
@@ -110,7 +107,7 @@ impl SingleGeneratorBoardFSM {
         let flushed_bytes = stream_reader::FlushDevice::new(&self.board, _timeout)
             .flush_device()
             .await;
-        println!("Connection Opened. Flushed {flushed_bytes} bytes!");
+        println!("Flushed {flushed_bytes} bytes!");
     }
 
     async fn initialize_board(&mut self) {
@@ -137,8 +134,11 @@ impl SingleGeneratorBoardFSM {
         let mut flash_calib = self.flash_calib;
         let timeout = Duration::from_secs(20);
 
-        let mut temperature_stabilizer = TemperatureStabilizer::new(&self.board, &mut flash_calib, timeout);
-        temperature_stabilizer.perform_temperature_stabilization().await;
+        let mut temperature_stabilizer =
+            TemperatureStabilizer::new(&self.board, &mut flash_calib, timeout);
+        temperature_stabilizer
+            .perform_temperature_stabilization()
+            .await;
 
         self.flash_calib = flash_calib;
     }
@@ -211,40 +211,12 @@ impl SingleGeneratorBoardFSM {
         base::set_tdc_time_threshold(&self.board, afp_threshold);
         base::reset_fail_flag_latch(&self.board);
     }
-
 }
 
 /*impl Future for SingleGeneratorBoardFSM {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        
-
-                StreamerState::TempStabilization => {
-                    let flash_calib = self.get_stream().get_flash_calib();
-                    let temperature_now: f32 = self.get_stream().req_temperature();
-                    let delta_t = f32::abs(flash_calib.get_ref_temp() - temperature_now);
-
-                    self.get_stream().set_gate_dcr();
-
-
-                    self.state = StreamerState::WriteSettings;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::WriteSettings => {
-                    self.get_stream().write_run_settings_to_device();
-                    self.get_stream().reset_rap_values(true, true, true);
-                    self.set_wait_end_of_generation();
-                    //self.get_stream().flush_device();
-
-                    self.state = StreamerState::ReadStream;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-
-                }
-
                 StreamerState::ReadStream => {
                     return Poll::Ready(());
                 }

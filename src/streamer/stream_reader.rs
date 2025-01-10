@@ -197,6 +197,8 @@ impl Stream for SGBStreamer {
                 waker.wake();
             });
         }
+
+        cx.waker().wake_by_ref();
         return Poll::Pending;
     }
 }
@@ -228,7 +230,6 @@ impl<'a> FlushDevice<'a> {
                 None => break,
             }
         }
-
         return total_cleaned_bytes;
     }
 
@@ -255,6 +256,7 @@ impl<'a> Stream for FlushDevice<'a> {
             return Poll::Ready(Some(bytes_read));
         }
 
+        cx.waker().wake_by_ref();
         return Poll::Pending;
     }
 }
@@ -316,7 +318,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
     fn set_last_poll_time(&mut self) {
         self.last_poll_time = Instant::now();
     }
-    
+
     fn set_gate_dcr(&mut self) {
         // read the DCR; 2 = 1 second gate for pulse counting
         //               1 = 10 seconds
@@ -340,7 +342,6 @@ impl<'a, 'b> Stream for TemperatureStabilizer<'a, 'b> {
             return Poll::Ready(Some(dword));
         }
 
-
         let waker = cx.waker().clone();
         let delay = self.delay;
         tokio::spawn(async move {
@@ -348,6 +349,7 @@ impl<'a, 'b> Stream for TemperatureStabilizer<'a, 'b> {
             waker.wake();
         });
 
+        cx.waker().wake_by_ref();
         return Poll::Pending;
     }
 }
