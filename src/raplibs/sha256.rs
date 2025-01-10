@@ -18,7 +18,7 @@ enum ShaAcceleratorStatus {
     CompError = 9,
 }
 
-pub fn perform_accelerator_initialization(device: &mut FtdiBoard) -> Result<(), RapLibErrors> {
+pub fn perform_accelerator_initialization(device: &FtdiBoard) -> Result<(), RapLibErrors> {
     req_init_self_test_sha256(device)?;
     let status: u32 = device.read_32_bit_u32()?;
     let fifo_status: u32 = status >> 4;
@@ -38,20 +38,20 @@ pub fn perform_accelerator_initialization(device: &mut FtdiBoard) -> Result<(), 
     }
 }
 
-fn req_init_self_test_sha256(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
+fn req_init_self_test_sha256(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 0;
     let value: u16 = 0;
     Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
 }
 
-fn req_read_sha256_fifo(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
+fn req_read_sha256_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 3;
     let value: u16 = 0;
     Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
 }
 
 pub fn set_reduction_ratio(
-    device: &mut FtdiBoard,
+    device: &FtdiBoard,
     run_settings: RunSettings,
 ) -> Result<(), RapLibErrors> {
     let cmd: u8 = 2;

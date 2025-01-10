@@ -11,7 +11,6 @@ fn main() {
     use libftd2xx::list_devices;
     println!("{:?}", list_devices());
     
-    println!("TEST RUN SETTINGS!");
     let x = RunSettings::initialize_run_settings();
     match x {
         Ok(_) => {
@@ -30,9 +29,10 @@ fn main() {
 async fn async_main() {
     let serial = "RNG46856";
 
-    let serial_stream = SingleGeneratorBoardFSM::new(serial);
+    let mut serial_stream = SingleGeneratorBoardFSM::new(serial);
 
-    serial_stream.await;
+    serial_stream.sgb_mananger().await;
+    println!("Completed");
 
 
     use tokio::time::Duration;
