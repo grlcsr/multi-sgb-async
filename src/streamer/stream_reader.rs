@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 use tokio_stream::{Stream, StreamExt};
 
 use super::global_data::*;
@@ -9,27 +10,29 @@ use crate::raplibs::{base, flash::FlashData, sanity_checks, settings::RunSetting
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
 
-#[derive(Debug)]
-pub struct StreamResult {
-    pub buf: [u8; BUFFER_SIZE],
-    pub rct: bool,
-    pub apt: bool
-}
-
 #[derive(Debug, Clone)]
-pub struct PacketGenerator<'a> {
+pub struct PacketGenerator<'a, 'b> {
+    serial_number: String,
     board: &'a FtdiBoard,
+    channel: &'b mpsc::Sender<StreamData>,
     // TODO add here shared queue for packet generation
-
+    // TODO controlalre numero di stringhe lette che sia = FFC0 / 2048 mi pare
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
 }
 
-impl<'a> PacketGenerator<'a> {
-    pub fn new(board: &'a FtdiBoard) -> Self {
+impl<'a, 'b> PacketGenerator<'a, 'b> {
+    pub fn new(
+        serial_number: String,
+        board: &'a FtdiBoard,
+        channel: &'b mpsc::Sender<StreamData>,
+    ) -> Self {
         Self {
+            serial_number,
             board,
+            channel,
+
             delay: Duration::from_millis(1),
             timeout: Duration::from_millis(500),
             last_poll_time: Instant::now(),
@@ -37,11 +40,78 @@ impl<'a> PacketGenerator<'a> {
     }
 
     pub async fn generate_packet(&mut self) {
-        todo!()
+        loop {
+            match self.next().await {
+                //TODO! Change to try next and return Result<usize, Err>
+                Some(read_buf) => {
+                    let _nist_tests = self.nist_tests(&read_buf).await;
+                    let stream_results = StreamData {
+                        serial: self.serial_number.clone(),
+                        data: Some(DataType::RAW_STREAM(RawStream::new(read_buf, _nist_tests[0], _nist_tests[1]))),
+                    };
+                    
+                    self.channel.send(stream_results).await;
+                }
+                None => break,
+            }
+        }
+    }
+
+    async fn nist_tests(&mut self, raw_bits: &[u8; BUFFER_SIZE]) -> [bool; 2] {
+        let apt_init_sym = raw_bits[0] >> 4;
+        let mut rct_prev = apt_init_sym;
+
+        let mut apt_count = 0;
+        let mut rct_count = 0;
+
+        let mut apt_fail = false;
+        let mut rct_fail = false;
+
+        for sym in raw_bits {
+            // RCT
+            if (sym >> 4) == rct_prev {
+                rct_count += 1;
+
+                if rct_count >= RCT_THR {
+                    rct_fail = true;
+                }
+            } else {
+                rct_count = 0;
+            }
+
+            rct_prev = sym >> 4;
+
+            if (sym & 15) == rct_prev {
+                rct_count += 1;
+
+                if rct_count >= RCT_THR {
+                    rct_fail = true;
+                }
+            } else {
+                rct_count = 0;
+            }
+
+            rct_prev = sym & 15;
+
+            // APT
+            if (sym >> 4) == apt_init_sym {
+                apt_count += 1;
+            }
+
+            if (sym & 15) == apt_init_sym {
+                apt_count += 1;
+            }
+        }
+
+        if apt_count >= APT_THR_UP || apt_count <= APT_THR_DOWN {
+            apt_fail = true;
+        }
+
+        return [rct_fail, apt_fail];
     }
 }
 
-impl<'a> Stream for PacketGenerator<'a> {
+impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
     type Item = [u8; BUFFER_SIZE];
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -52,6 +122,7 @@ impl<'a> Stream for PacketGenerator<'a> {
 
         if self.board.get_queue_status().unwrap() > 0 {
             let mut read_buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+            let _bytes_read = self.board.read(&mut read_buf).unwrap();
 
             self.last_poll_time = Instant::now();
             return Poll::Ready(Some(read_buf));
@@ -63,13 +134,11 @@ impl<'a> Stream for PacketGenerator<'a> {
             tokio::time::sleep(delay).await;
             waker.wake();
         });
-        
+
         cx.waker().wake_by_ref();
         return Poll::Pending;
     }
-
 }
-
 
 #[derive(Debug, Clone)]
 pub struct FlushDevice<'a> {

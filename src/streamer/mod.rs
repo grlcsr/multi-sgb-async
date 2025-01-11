@@ -1,10 +1,11 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
+use tokio::sync::mpsc;
 use std::{fmt::Error, time::Duration};
 
-use global_data::FRESH_NIBBLES_AFTER_RESET;
-use stream_reader::TemperatureStabilizer;
+use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
+use stream_reader::{PacketGenerator, TemperatureStabilizer};
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
 use crate::raplibs::{
@@ -21,7 +22,9 @@ enum StreamerState {
     ReadStream,
     ReadTests,
     TempCompensation,
+    CheckSettings,
     Termination,
+    ErrorHandler,
 }
 
 pub struct SingleGeneratorBoardFSM {
@@ -34,12 +37,15 @@ pub struct SingleGeneratorBoardFSM {
     run_settings_local: RunSettings,
 
     v_counter_last: i32,
+
+    tx_channel: Option<mpsc::Sender<StreamData>>
 }
 
 impl SingleGeneratorBoardFSM {
-    pub fn new(serial: &'static str) -> Self {
+    pub fn new(serial: &'static str, tx_channel: Option<mpsc::Sender<StreamData>>) -> Self {
         Self {
             serial_number: serial.to_string(),
+            tx_channel,
             ..Default::default()
         }
     }
@@ -93,11 +99,17 @@ impl SingleGeneratorBoardFSM {
                 }
 
                 StreamerState::ReadStream => {
-                    todo!()
+                    println!("Generating bits.");
+                    self.generate_packet().await;
+
+                    self.state = StreamerState::ReadTests;
                 }
+
                 StreamerState::ReadTests => todo!(),
                 StreamerState::TempCompensation => todo!(),
+                StreamerState::CheckSettings => todo!(),
                 StreamerState::Termination => todo!(),
+                StreamerState::ErrorHandler => todo!(),
             }
         }
     }
@@ -120,6 +132,14 @@ impl SingleGeneratorBoardFSM {
 
         let afp_threshold: u16 = self.run_settings_local.get_afp_threshold();
         base::set_tdc_time_threshold(device, afp_threshold);
+    }
+
+    async fn generate_packet(&mut self) {
+        if let Some(tx_channel) = self.tx_channel.clone() {
+            let serial_number = self.serial_number.clone();
+            let mut packet_generator = PacketGenerator::new(serial_number, &self.board, &tx_channel);
+            packet_generator.generate_packet().await;
+        }
     }
 
     async fn open_connection(&mut self) {
@@ -239,6 +259,7 @@ impl Default for SingleGeneratorBoardFSM {
             flash_calib: FlashData::default(),
             run_settings_local: RunSettings::default(),
             v_counter_last: 0,
+            tx_channel: None
         }
     }
 }

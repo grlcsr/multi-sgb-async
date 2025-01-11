@@ -2,9 +2,11 @@ mod streamer;
 mod raplibs;
 
 use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
 
-use streamer::SingleGeneratorBoardFSM;
 use raplibs::settings::RunSettings;
+use streamer::global_data::StreamData;
+use streamer::SingleGeneratorBoardFSM;
 
 fn main() {
 
@@ -29,11 +31,18 @@ fn main() {
 async fn async_main() {
     let serial = "RNG46856";
 
-    let mut serial_stream = SingleGeneratorBoardFSM::new(serial);
+    let (tx, mut rx) = mpsc::channel::<StreamData>(1000);
 
-    serial_stream.sgb_mananger().await;
-    println!("Completed");
+    let mut serial_stream = SingleGeneratorBoardFSM::new(serial, Some(tx.clone()));
 
+    tokio::spawn(async move {
+        serial_stream.sgb_mananger().await;
+    });
+    //println!("Completed");
+
+    while let Some(message) = rx.recv().await {
+        println!("GOT = {:?}", message);
+    }
 
     use tokio::time::Duration;
     tokio::time::sleep(Duration::from_secs(3)).await;
