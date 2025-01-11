@@ -19,7 +19,7 @@ pub struct PacketGenerator<'a, 'b> {
     channel: &'b mpsc::Sender<StreamData>,
     // TODO add here shared queue for packet generation
     // TODO controlalre numero di stringhe lette che sia = FFC0 / 2048 mi pare
-    num_seeds: u16,
+    num_seeds: i32,
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
@@ -30,7 +30,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
-        bit_strings: u16,
+        bit_strings: i32,
     ) -> Self {
         Self {
             serial_number,
@@ -49,6 +49,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
 
         loop {
             if self.num_seeds == 0 {
+                println!("Produced all bits");
                 break;
             }
 
@@ -67,6 +68,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
 
                     self.channel.send(stream_results).await;
                     self.num_seeds -= 1;
+                    println!("Missing seeds: {}", self.num_seeds);
                 }
                 None => break,
             }
@@ -137,8 +139,7 @@ impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
         }
 
         let rx = self.board.get_queue_status().unwrap();
-        if rx > 0xff {
-            println!("{:?}", self.last_poll_time);
+        if rx >= 0x100 {
             let mut read_buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
             let _bytes_read = self.board.read(&mut read_buf).unwrap();
 

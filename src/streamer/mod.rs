@@ -139,7 +139,9 @@ impl SingleGeneratorBoardFSM {
     async fn generate_packet(&mut self) {
         if let Some(tx_channel) = self.tx_channel.clone() {
             let serial_number = self.serial_number.clone();
-            let num_seeds: u16 = self.run_settings_local.get_num_of_dwords() / SEED_LENGTH as u16 * 32;
+            let dwords = self.run_settings_local.get_num_of_dwords();
+            let num_seeds: i32 = dwords as i32 *4 / SEED_LENGTH as i32;
+            println!("{dwords} {SEED_LENGTH} {num_seeds}");
             let mut packet_generator = PacketGenerator::new(serial_number, &self.board, &tx_channel, num_seeds);
             packet_generator.generate_packet().await;
         }

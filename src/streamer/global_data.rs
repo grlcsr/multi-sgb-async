@@ -1,5 +1,5 @@
-pub(crate) const SEED_LENGTH: usize = 248;
-pub(crate) const BUFFER_SIZE: usize = 256;
+pub(crate) const SEED_LENGTH: usize = 2048 / 8;
+pub(crate) const BUFFER_SIZE: usize = SEED_LENGTH;
 pub(crate) const BUFFER_SIZE_32_BITS: usize = 4;
 pub(crate) const BUFFER_SIZE_64_BITS: usize = 8;
 pub(crate) const BUFFER_SIZE_FLUSHING: usize = 100000;
