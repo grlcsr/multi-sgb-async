@@ -115,6 +115,7 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn flush_device(&mut self) {
+        println!("Flushing device, please wait.");
         let _timeout = Duration::from_secs(1);
         let flushed_bytes = stream_reader::FlushDevice::new(&self.board, _timeout)
             .flush_device()
@@ -164,7 +165,6 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn read_flash(&mut self) {
-        println!("Initializing Flash data.");
         let device: &FtdiBoard = &self.board;
         let flash_data = FlashData::get_flash_info(device).expect("Error decoding Flash data.");
         self.flash_default = flash_data;
