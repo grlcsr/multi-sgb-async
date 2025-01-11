@@ -10,6 +10,9 @@ use crate::raplibs::{base, flash::FlashData, sanity_checks, settings::RunSetting
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
 
+pub const MAXIMUM_NUM_OF_DWORDS: usize = 0xffc0;
+
+
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
     serial_number: String,
@@ -17,6 +20,7 @@ pub struct PacketGenerator<'a, 'b> {
     channel: &'b mpsc::Sender<StreamData>,
     // TODO add here shared queue for packet generation
     // TODO controlalre numero di stringhe lette che sia = FFC0 / 2048 mi pare
+    num_seeds: u16,
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
@@ -27,11 +31,13 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
+        bit_strings: u16
     ) -> Self {
         Self {
             serial_number,
             board,
             channel,
+            num_seeds: bit_strings,
 
             delay: Duration::from_millis(1),
             timeout: Duration::from_millis(500),
@@ -40,7 +46,13 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
     }
 
     pub async fn generate_packet(&mut self) {
+        base::request_raw_tdc_words(&self.board, MAXIMUM_NUM_OF_DWORDS as u16);
+
         loop {
+            if self.num_seeds == 0 {
+                break;
+            }
+            
             match self.next().await {
                 //TODO! Change to try next and return Result<usize, Err>
                 Some(read_buf) => {
@@ -51,6 +63,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     };
                     
                     self.channel.send(stream_results).await;
+                    self.num_seeds -= 1;
                 }
                 None => break,
             }
