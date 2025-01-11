@@ -45,7 +45,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
     }
 
     pub async fn generate_packet(&mut self) {
-        base::request_raw_tdc_words(&self.board, MAXIMUM_NUM_OF_DWORDS as u16);
+        base::request_raw_tdc_words(self.board, MAXIMUM_NUM_OF_DWORDS as u16);
 
         loop {
             if self.num_seeds == 0 {
@@ -124,7 +124,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
             apt_fail = true;
         }
 
-        return [rct_fail, apt_fail];
+        [rct_fail, apt_fail]
     }
 }
 
@@ -154,7 +154,7 @@ impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
         });
 
         cx.waker().wake_by_ref();
-        return Poll::Pending;
+        Poll::Pending
     }
 }
 
@@ -185,7 +185,7 @@ impl<'a> FlushDevice<'a> {
                 None => break,
             }
         }
-        return total_cleaned_bytes;
+        total_cleaned_bytes
     }
 }
 
@@ -207,7 +207,7 @@ impl<'a> Stream for FlushDevice<'a> {
         }
 
         cx.waker().wake_by_ref();
-        return Poll::Pending;
+        Poll::Pending
     }
 }
 
@@ -232,7 +232,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
     }
 
     pub async fn perform_temperature_stabilization(&mut self) {
-        let mut temperature_now: f32 = base::req_temperature(&self.board).unwrap();
+        let mut temperature_now: f32 = base::req_temperature(self.board).unwrap();
         let mut delta_t = f32::abs(self.flash_data.get_ref_temp() - temperature_now);
 
         println!("Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}", temperature_now, self.flash_data.get_ref_temp(), delta_t);
@@ -256,7 +256,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
                     }
                 }
 
-                temperature_now = base::req_temperature(&self.board).unwrap();
+                temperature_now = base::req_temperature(self.board).unwrap();
                 delta_t = temperature_now - temperature_old;
                 println!("Temperature stabilization: DCR [KHz] = {}; temperature_old = {}; temperature_now = {}, delta_t = {}.", dcr_now, temperature_old, temperature_now, delta_t);
             }.await
@@ -269,7 +269,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         // read the DCR; 2 = 1 second gate for pulse counting
         //               1 = 10 seconds
         let value = 1;
-        base::set_gate_dcr(&self.board, value);
+        base::set_gate_dcr(self.board, value);
     }
 }
 
@@ -296,6 +296,6 @@ impl<'a, 'b> Stream for TemperatureStabilizer<'a, 'b> {
         });
 
         cx.waker().wake_by_ref();
-        return Poll::Pending;
+        Poll::Pending
     }
 }

@@ -41,13 +41,13 @@ pub fn perform_accelerator_initialization(device: &FtdiBoard) -> Result<(), RapL
 fn req_init_self_test_sha256(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 0;
     let value: u16 = 0;
-    Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
+    crate::raplibs::base::write_pack(device, cmd, value)
 }
 
 fn req_read_sha256_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 3;
     let value: u16 = 0;
-    Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
+    crate::raplibs::base::write_pack(device, cmd, value)
 }
 
 pub fn set_reduction_ratio(

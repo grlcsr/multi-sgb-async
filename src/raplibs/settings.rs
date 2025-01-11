@@ -34,7 +34,7 @@ pub struct RunSettings {
 }
 
 lazy_static! {
-    static ref RUN_SETTINGS: Mutex<RunSettings> = Mutex::new({ RunSettings::default() });
+    static ref RUN_SETTINGS: Mutex<RunSettings> = Mutex::new(RunSettings::default());
 }
 
 impl RunSettings {

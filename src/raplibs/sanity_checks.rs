@@ -118,13 +118,13 @@ fn set_confidence_level_runs(device: &FtdiBoard, value: u16) -> Result<usize, Ra
 
 fn set_asym_nos(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 8;
-    Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
+    crate::raplibs::base::write_pack(device, cmd, value)
 }
 
 fn req_read_asym_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 9;
     let value: u16 = 0;
-    Ok(crate::raplibs::base::write_pack(device, cmd, value)?)
+    crate::raplibs::base::write_pack(device, cmd, value)
 }
 
 fn req_read_monobit_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {

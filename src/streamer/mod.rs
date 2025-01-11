@@ -2,9 +2,9 @@ pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
 use tokio::sync::mpsc;
-use std::{fmt::Error, time::Duration};
+use std::time::Duration;
 
-use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET, SEED_LENGTH};
+use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
 use stream_reader::{PacketGenerator, TemperatureStabilizer};
 
 use super::raplibs::ftdi_wrapper::FtdiBoard;
@@ -150,8 +150,7 @@ impl SingleGeneratorBoardFSM {
     async fn open_connection(&mut self) {
         self.board = base::open_with_serial(&self.serial_number).unwrap();
         self.run_settings_local = RunSettings::get_run_settings()
-            .expect("Panic initializing DeviceStream: cannot get runsettings.")
-            .clone();
+            .expect("Panic initializing DeviceStream: cannot get runsettings.");
         self.flush_device().await;
     }
 
@@ -223,7 +222,7 @@ impl SingleGeneratorBoardFSM {
             }
         }
 
-        return v_counter_total;
+        v_counter_total
     }
 
     fn write_run_settings_to_device(&self) {
