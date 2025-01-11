@@ -3,6 +3,7 @@ pub(crate) const BUFFER_SIZE: usize = SEED_LENGTH;
 pub(crate) const BUFFER_SIZE_32_BITS: usize = 4;
 pub(crate) const BUFFER_SIZE_64_BITS: usize = 8;
 pub(crate) const BUFFER_SIZE_FLUSHING: usize = 100000;
+pub(crate) const MAXIMUM_NUM_OF_DWORDS: usize = 0xffff;
 
 // From v_counter after reset if there is no hardware error (found experimentally, no idea why)
 pub(crate) const FRESH_NIBBLES_AFTER_RESET: i32 = 8188;
@@ -13,12 +14,12 @@ pub(crate) const APT_THR_DOWN: usize = 8;
 
 #[derive(Debug)]
 pub enum DataType {
-    DEVICE_ERROR(String),
-    RAW_STREAM(RawStream),
-    MONOBIT,
-    RUNS,
-    ASYM,
-    SHA256
+    DeviceError(String),
+    RawStream(RawStream),
+    Asym(Vec<i32>),
+    Monobit(Vec<(f32, u32, u32)>),
+    Runs(Vec<(f64, u32, u32)>),
+    Sha256(Vec<u8>)
 }
 
 #[derive(Debug)]

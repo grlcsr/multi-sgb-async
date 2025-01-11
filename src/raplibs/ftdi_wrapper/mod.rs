@@ -54,6 +54,12 @@ impl FtdiBoard {
         Ok(u32::from_be_bytes(buf_32b_u32))
     }
 
+    pub fn read_64_bit_u64(&self) -> Result<u64, FtdiBoardStatus> {
+        let mut buf_64b_u64: [u8; 8] = [0; 8];
+        let _: usize = self.read(&mut buf_64b_u64)?;
+        Ok(u64::from_be_bytes(buf_64b_u64))
+    }
+
     pub fn write(&self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
         let mut tdc_command: [u8; 4] = [0; 4];
         tdc_command[0] = 0xa5;

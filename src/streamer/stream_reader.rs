@@ -4,22 +4,17 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, StreamExt};
 
-use super::global_data::*;
-use super::FtdiBoard;
-use crate::raplibs::{base, flash::FlashData};
+use super::{base, global_data::*, sanity_checks, sha256, FlashData, FtdiBoard};
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
-
-pub const MAXIMUM_NUM_OF_DWORDS: usize = 0xffc0;
 
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
     serial_number: String,
     board: &'a FtdiBoard,
     channel: &'b mpsc::Sender<StreamData>,
-    // TODO add here shared queue for packet generation
-    // TODO controlalre numero di stringhe lette che sia = FFC0 / 2048 mi pare
-    num_seeds: i32,
+
+    max_dwords: u16,
     last_poll_time: Instant,
     delay: Duration,
     timeout: Duration,
@@ -36,19 +31,20 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
             serial_number,
             board,
             channel,
-            num_seeds: max_dwords as i32 * 4 / SEED_LENGTH as i32,
+            max_dwords,
 
             delay: Duration::from_millis(1),
-            timeout: Duration::from_secs(5),
+            timeout: Duration::from_secs(1),
             last_poll_time: Instant::now(),
         }
     }
 
     pub async fn generate_packet(&mut self) {
-        base::request_raw_tdc_words(self.board, MAXIMUM_NUM_OF_DWORDS as u16);
+        base::request_raw_tdc_words(self.board, self.max_dwords);
+        let mut num_seeds = self.max_dwords as i32 * 4 / SEED_LENGTH as i32;
 
         loop {
-            if self.num_seeds == 0 {
+            if num_seeds == 0 {
                 break;
             }
 
@@ -58,7 +54,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     let _nist_tests = self.nist_tests(&read_buf).await;
                     let stream_results = StreamData {
                         serial: self.serial_number.clone(),
-                        data: Some(DataType::RAW_STREAM(RawStream::new(
+                        data: Some(DataType::RawStream(RawStream::new(
                             read_buf,
                             _nist_tests[0],
                             _nist_tests[1],
@@ -66,8 +62,9 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     };
 
                     self.channel.send(stream_results).await;
-                    self.num_seeds -= 1;
-                    println!("Missing seeds: {}", self.num_seeds);
+
+                    num_seeds -= 1;
+                    println!("Missing seeds: {}", num_seeds);
                 }
                 None => break,
             }
@@ -159,6 +156,124 @@ impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
 }
 
 #[derive(Debug, Clone)]
+pub struct FifoReader<'a, 'b> {
+    serial_number: String,
+    board: &'a FtdiBoard,
+    channel: &'b mpsc::Sender<StreamData>,
+}
+
+impl<'a, 'b> FifoReader<'a, 'b> {
+    pub fn new(
+        serial_number: String,
+        board: &'a FtdiBoard,
+        channel: &'b mpsc::Sender<StreamData>,
+    ) -> Self {
+        Self {
+            serial_number,
+            board,
+            channel,
+        }
+    }
+
+    pub async fn read_fifo_results(&mut self) {
+        let asym = self.request_asymmetry_results().await;
+        let asym_results = StreamData {
+            serial: self.serial_number.clone(),
+            data: Some(DataType::Asym(asym)),
+        };
+        self.channel.send(asym_results).await;
+        
+        let monobit = self.request_monobit_results().await;
+        let monobit_results = StreamData {
+            serial: self.serial_number.clone(),
+            data: Some(DataType::Monobit(monobit)),
+        };
+        self.channel.send(monobit_results).await;
+        
+        let runs = self.request_runs_results().await;
+        let runs_results = StreamData {
+            serial: self.serial_number.clone(),
+            data: Some(DataType::Runs(runs)),
+        };
+        self.channel.send(runs_results).await;
+
+        let sha = self.request_sha256_results().await;
+        let sha_results = StreamData {
+            serial: self.serial_number.clone(),
+            data: Some(DataType::Sha256(sha)),
+        };
+        self.channel.send(sha_results).await;
+    }
+
+    async fn request_asymmetry_results(&mut self) -> Vec<i32> {
+        let mut asym_buffer: Vec<i32> = Vec::new();
+        sanity_checks::req_read_asym_fifo(self.board);
+
+        loop {
+            let value_read = async { self.board.read_32_bit_u32().unwrap() }.await;
+
+            if (value_read & 0x80000000) == 0 {
+                asym_buffer.push(sanity_checks::signed_int_to_dec(value_read));
+            } else {
+                break;
+            }
+        }
+        asym_buffer
+    }
+
+    async fn request_monobit_results(&mut self) -> Vec<(f32, u32, u32)> {
+        let mut monobit_buffer: Vec<(f32, u32, u32)> = Vec::new();
+        sanity_checks::req_read_monobit_fifo(self.board);
+
+        loop {
+            let value_read: u32 = async { self.board.read_32_bit_u32().unwrap() }.await;
+
+            if (value_read & 0x80000000) == 0 {
+                let sn_mean_value: f32 =
+                    sanity_checks::fxp_to_flp_smpl((value_read & 0x1ffffff) as i32, 10.0);
+                let fail_flag: u32 = (value_read >> 25) & 0xf;
+                let fail_flag_latch: u32 = (value_read >> 29) & 0x1;
+
+                monobit_buffer.push((sn_mean_value, fail_flag, fail_flag_latch));
+            } else {
+                break;
+            }
+        }
+        monobit_buffer
+    }
+
+    async fn request_runs_results(&mut self) -> Vec<(f64, u32, u32)> {
+        let mut runs_buffer: Vec<(f64, u32, u32)> = Vec::new();
+        sanity_checks::req_read_runs_fifo(self.board);
+
+        loop {
+            let value_read: u64 = async { self.board.read_64_bit_u64().unwrap() }.await;
+
+            if (value_read & 0x8000000000000000) == 0 {
+                let signed_z_val_fxp: u64 = value_read & 0xFFFFFFFFFFFFF;
+
+                let z_value: f64 = sanity_checks::fixed_to_float(signed_z_val_fxp, 52, 44);
+                let fail_flag: u32 = ((value_read & 0x3c0000000000000) >> (13 * 4 + 2)) as u32;
+                let fail_flag_latch: u32 = ((value_read & 0x10000000000000) >> (13 * 4)) as u32;
+
+                runs_buffer.push((z_value, fail_flag, fail_flag_latch));
+            } else {
+                break;
+            }
+        }
+        runs_buffer
+    }
+
+    async fn request_sha256_results(&mut self) -> Vec<u8> {
+        sha256::req_read_sha256_fifo(self.board);
+        let words_in_fpga: usize = self.board.read_32_bit_u32().unwrap() as usize;
+        let mut sha_results: [u8; MAXIMUM_NUM_OF_DWORDS*4] = [0; MAXIMUM_NUM_OF_DWORDS*4];
+        let _ = self.board.read(&mut sha_results);
+        sha_results[..words_in_fpga].to_vec()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FlushDevice<'a> {
     board: &'a FtdiBoard,
 
@@ -235,7 +350,12 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         let mut temperature_now: f32 = base::req_temperature(self.board).unwrap();
         let mut delta_t = f32::abs(self.flash_data.get_ref_temp() - temperature_now);
 
-        println!("Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}", temperature_now, self.flash_data.get_ref_temp(), delta_t);
+        println!(
+            "Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}",
+            temperature_now,
+            self.flash_data.get_ref_temp(),
+            delta_t
+        );
 
         self.set_gate_dcr();
 

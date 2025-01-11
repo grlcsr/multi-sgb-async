@@ -40,8 +40,7 @@ async fn async_main() {
     });
 
     while let Some(message) = rx.recv().await {
-        //println!("GOT = {:?}", message.serial);
-        continue;
+        println!("GOT = {:?}", message);
     }
 
     use tokio::time::Duration;

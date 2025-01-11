@@ -44,7 +44,7 @@ fn req_init_self_test_sha256(device: &FtdiBoard) -> Result<usize, RapLibErrors> 
     crate::raplibs::base::write_pack(device, cmd, value)
 }
 
-fn req_read_sha256_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_sha256_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 3;
     let value: u16 = 0;
     crate::raplibs::base::write_pack(device, cmd, value)

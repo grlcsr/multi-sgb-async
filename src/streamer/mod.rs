@@ -5,11 +5,9 @@ use tokio::sync::mpsc;
 use std::time::Duration;
 
 use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
-use stream_reader::{PacketGenerator, TemperatureStabilizer};
-
-use super::raplibs::ftdi_wrapper::FtdiBoard;
+use stream_reader::{FifoReader, PacketGenerator, TemperatureStabilizer};
 use crate::raplibs::{
-    base, flash::FlashData, sanity_checks, settings::RunSettings, sha256, RapLibErrors,
+    base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256, RapLibErrors, 
 };
 
 enum StreamerState {
@@ -106,7 +104,12 @@ impl SingleGeneratorBoardFSM {
                     self.state = StreamerState::ReadTests;
                 }
 
-                StreamerState::ReadTests => todo!(),
+                StreamerState::ReadTests => {
+                    println!("Reading Fifos from buffer.");
+                    self.read_fifo_buffers().await;
+                    
+                    self.state = StreamerState::TempCompensation;
+                },
                 StreamerState::TempCompensation => todo!(),
                 StreamerState::CheckSettings => todo!(),
                 
@@ -176,6 +179,15 @@ impl SingleGeneratorBoardFSM {
         println!("{:?}", self.flash_default);
     }
 
+    async fn read_fifo_buffers(&mut self) {
+        if let Some(tx_channel) = self.tx_channel.clone() {
+            let serial_number = self.serial_number.clone();
+            
+            let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
+            fifo_reader.read_fifo_results().await;
+        }
+    }
+
     async fn reset_nibbles(&mut self) -> Result<(), RapLibErrors> {
         for _i in 0..5 {
             base::reset_rap_values(&mut self.board, true, true, true);
@@ -235,19 +247,6 @@ impl SingleGeneratorBoardFSM {
         base::reset_fail_flag_latch(&self.board);
     }
 }
-
-/*impl Future for SingleGeneratorBoardFSM {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-                StreamerState::ReadTests => todo!(),
-                StreamerState::TempCompensation => todo!(),
-                StreamerState::Termination => todo!(),
-            }
-        }
-    }
-}
-*/
 
 impl Default for SingleGeneratorBoardFSM {
     fn default() -> Self {
