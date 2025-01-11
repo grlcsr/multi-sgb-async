@@ -6,7 +6,7 @@ use tokio_stream::{Stream, StreamExt};
 
 use super::global_data::*;
 use super::FtdiBoard;
-use crate::raplibs::{base, flash::FlashData, sanity_checks, settings::RunSettings, sha256};
+use crate::raplibs::{base, flash::FlashData};
 
 // TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
 
@@ -30,13 +30,13 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
-        bit_strings: i32,
+        max_dwords: u16,
     ) -> Self {
         Self {
             serial_number,
             board,
             channel,
-            num_seeds: bit_strings,
+            num_seeds: max_dwords as i32 * 4 / SEED_LENGTH as i32,
 
             delay: Duration::from_millis(1),
             timeout: Duration::from_secs(5),
@@ -49,7 +49,6 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
 
         loop {
             if self.num_seeds == 0 {
-                println!("Produced all bits");
                 break;
             }
 

@@ -109,6 +109,7 @@ impl SingleGeneratorBoardFSM {
                 StreamerState::ReadTests => todo!(),
                 StreamerState::TempCompensation => todo!(),
                 StreamerState::CheckSettings => todo!(),
+                
                 StreamerState::Termination => todo!(),
                 StreamerState::ErrorHandler => todo!(),
             }
@@ -139,10 +140,9 @@ impl SingleGeneratorBoardFSM {
     async fn generate_packet(&mut self) {
         if let Some(tx_channel) = self.tx_channel.clone() {
             let serial_number = self.serial_number.clone();
-            let dwords = self.run_settings_local.get_num_of_dwords();
-            let num_seeds: i32 = dwords as i32 *4 / SEED_LENGTH as i32;
-            println!("{dwords} {SEED_LENGTH} {num_seeds}");
-            let mut packet_generator = PacketGenerator::new(serial_number, &self.board, &tx_channel, num_seeds);
+            let max_dwords = self.run_settings_local.get_num_of_dwords();
+            
+            let mut packet_generator = PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
             packet_generator.generate_packet().await;
         }
     }
@@ -241,9 +241,6 @@ impl SingleGeneratorBoardFSM {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-                StreamerState::ReadStream => {
-                    return Poll::Ready(());
-                }
                 StreamerState::ReadTests => todo!(),
                 StreamerState::TempCompensation => todo!(),
                 StreamerState::Termination => todo!(),
