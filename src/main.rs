@@ -38,7 +38,6 @@ async fn async_main() {
     tokio::spawn(async move {
         serial_stream.sgb_mananger().await;
     });
-    //println!("Completed");
 
     while let Some(message) = rx.recv().await {
         println!("GOT = {:?}", message);

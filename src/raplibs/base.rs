@@ -53,7 +53,7 @@ pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, RapLibErrors> 
 
 pub fn request_raw_tdc_words(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 6;
-    Ok(device.write(cmd, value)?)
+    Ok(write_pack(device, cmd, value)?)
 }
 
 pub fn req_read_dcr(device: &FtdiBoard) -> Result<usize, RapLibErrors> {

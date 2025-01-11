@@ -62,7 +62,7 @@ impl FtdiBoard {
         let value_u8: [u8; 2] = value.to_be_bytes();
         tdc_command[1..3].copy_from_slice(&value_u8[..]);
 
-        //println!("TDC command: {:?}", tdc_command);
+        // println!("TDC command: {:?}", tdc_command);
 
         Ok(self.get_device().write(&tdc_command)?)
     }

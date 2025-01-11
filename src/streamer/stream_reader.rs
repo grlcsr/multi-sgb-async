@@ -12,7 +12,6 @@ use crate::raplibs::{base, flash::FlashData, sanity_checks, settings::RunSetting
 
 pub const MAXIMUM_NUM_OF_DWORDS: usize = 0xffc0;
 
-
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
     serial_number: String,
@@ -31,7 +30,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
-        bit_strings: u16
+        bit_strings: u16,
     ) -> Self {
         Self {
             serial_number,
@@ -40,7 +39,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
             num_seeds: bit_strings,
 
             delay: Duration::from_millis(1),
-            timeout: Duration::from_millis(500),
+            timeout: Duration::from_secs(5),
             last_poll_time: Instant::now(),
         }
     }
@@ -52,16 +51,20 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
             if self.num_seeds == 0 {
                 break;
             }
-            
+
             match self.next().await {
                 //TODO! Change to try next and return Result<usize, Err>
                 Some(read_buf) => {
                     let _nist_tests = self.nist_tests(&read_buf).await;
                     let stream_results = StreamData {
                         serial: self.serial_number.clone(),
-                        data: Some(DataType::RAW_STREAM(RawStream::new(read_buf, _nist_tests[0], _nist_tests[1]))),
+                        data: Some(DataType::RAW_STREAM(RawStream::new(
+                            read_buf,
+                            _nist_tests[0],
+                            _nist_tests[1],
+                        ))),
                     };
-                    
+
                     self.channel.send(stream_results).await;
                     self.num_seeds -= 1;
                 }
@@ -133,7 +136,9 @@ impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
             return Poll::Ready(None);
         }
 
-        if self.board.get_queue_status().unwrap() > 0 {
+        let rx = self.board.get_queue_status().unwrap();
+        if rx > 0xff {
+            println!("{:?}", self.last_poll_time);
             let mut read_buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
             let _bytes_read = self.board.read(&mut read_buf).unwrap();
 
@@ -195,7 +200,6 @@ impl<'a> Stream for FlushDevice<'a> {
 
         if self.board.get_queue_status().unwrap() > 0 {
             let mut read_buf: [u8; BUFFER_SIZE_FLUSHING] = [0; BUFFER_SIZE_FLUSHING];
-
             let bytes_read = self.board.read(&mut read_buf).unwrap();
 
             self.last_poll_time = Instant::now();
@@ -231,7 +235,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         let mut temperature_now: f32 = base::req_temperature(&self.board).unwrap();
         let mut delta_t = f32::abs(self.flash_data.get_ref_temp() - temperature_now);
 
-        println!("Performing temeprature stabilization. Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}", temperature_now, self.flash_data.get_ref_temp(), delta_t);
+        println!("Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}", temperature_now, self.flash_data.get_ref_temp(), delta_t);
 
         self.set_gate_dcr();
 
