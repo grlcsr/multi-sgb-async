@@ -37,6 +37,10 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
     }
 }
 
+pub fn hv_compensate(temperature_now: f32, hv_val:f32, ref_temp: f32) -> f32 {
+    hv_val + (temperature_now - ref_temp) * 0.054
+}
+
 pub fn initialize_sipm_parameters(
     device: &FtdiBoard,
     hv_val: f32,
@@ -113,7 +117,7 @@ pub fn set_gate_dcr(device: &FtdiBoard, value: u16) -> Result<usize, RapLibError
     Ok(device.write(cmd, value)?)
 }
 
-fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
+pub fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetHVDac as u8;
     // Conversion of hv value formula
     let value: u16 = (1534.6 + -26.23 * f32::min(hv_val, 58.2)) as u16;

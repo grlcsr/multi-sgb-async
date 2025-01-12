@@ -1,14 +1,15 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_reader;
 
-use tokio::sync::mpsc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 
+use crate::raplibs::{
+    base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256,
+    RapLibErrors,
+};
 use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
 use stream_reader::{FifoReader, PacketGenerator, TemperatureStabilizer};
-use crate::raplibs::{
-    base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256, RapLibErrors, 
-};
 
 enum StreamerState {
     OpenConnection,
@@ -36,7 +37,7 @@ pub struct SingleGeneratorBoardFSM {
 
     v_counter_last: i32,
 
-    tx_channel: Option<mpsc::Sender<StreamData>>
+    tx_channel: Option<mpsc::Sender<StreamData>>,
 }
 
 impl SingleGeneratorBoardFSM {
@@ -82,10 +83,7 @@ impl SingleGeneratorBoardFSM {
                 StreamerState::WriteSettings => {
                     println!("Writing settings to device.");
                     self.write_run_settings_to_device();
-                    base::reset_rap_values(&self.board, true, true, true);
-                    let t = self.wait_for_end_of_generation().await;
-                    println!("writeSettings: {t}");
-                    self.flush_device().await;
+                    self.prepare_fifos().await;
 
                     self.state = StreamerState::TempStabilization;
                 }
@@ -107,12 +105,31 @@ impl SingleGeneratorBoardFSM {
                 StreamerState::ReadTests => {
                     println!("Reading Fifos from buffer.");
                     self.read_fifo_buffers().await;
-                    
+
                     self.state = StreamerState::TempCompensation;
-                },
-                StreamerState::TempCompensation => todo!(),
-                StreamerState::CheckSettings => todo!(),
-                
+                }
+
+                StreamerState::TempCompensation => {
+                    println!("Performing Temperature Compensation.");
+
+                    if self.temperature_compensation() {
+                        self.prepare_fifos().await;
+                    }
+
+                    self.state = StreamerState::CheckSettings;
+                }
+
+                StreamerState::CheckSettings => {
+                    if let Ok(new_settings) = RunSettings::get_run_settings() {
+                        if self.run_settings_local != new_settings {
+                            self.run_settings_local = new_settings;
+                            self.write_run_settings_to_device();
+                            self.prepare_fifos().await;
+                        }
+                    }
+                    self.state = StreamerState::ReadStream;
+                }
+
                 StreamerState::Termination => todo!(),
                 StreamerState::ErrorHandler => todo!(),
             }
@@ -144,8 +161,9 @@ impl SingleGeneratorBoardFSM {
         if let Some(tx_channel) = self.tx_channel.clone() {
             let serial_number = self.serial_number.clone();
             let max_dwords = self.run_settings_local.get_num_of_dwords();
-            
-            let mut packet_generator = PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
+
+            let mut packet_generator =
+                PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
             packet_generator.generate_packet().await;
         }
     }
@@ -170,6 +188,13 @@ impl SingleGeneratorBoardFSM {
         self.flash_calib = flash_calib;
     }
 
+    async fn prepare_fifos(&mut self) {
+        base::reset_fail_flag_latch(&self.board);
+        base::reset_rap_values(&self.board, true, true, true);
+        let _ = self.wait_for_end_of_generation().await;
+        self.flush_device().await;
+    }
+
     async fn read_flash(&mut self) {
         let device: &FtdiBoard = &self.board;
         let flash_data = FlashData::get_flash_info(device).expect("Error decoding Flash data.");
@@ -182,7 +207,7 @@ impl SingleGeneratorBoardFSM {
     async fn read_fifo_buffers(&mut self) {
         if let Some(tx_channel) = self.tx_channel.clone() {
             let serial_number = self.serial_number.clone();
-            
+
             let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
             fifo_reader.read_fifo_results().await;
         }
@@ -244,7 +269,25 @@ impl SingleGeneratorBoardFSM {
         sha256::perform_accelerator_initialization(&self.board);
         sha256::set_reduction_ratio(&self.board, self.run_settings_local);
         base::set_tdc_time_threshold(&self.board, afp_threshold);
-        base::reset_fail_flag_latch(&self.board);
+    }
+
+    fn temperature_compensation(&mut self) -> bool {
+        let flash_default = self.flash_default;
+        let temperature_now = base::req_temperature(&self.board).unwrap();
+        let hv_now = base::hv_compensate(
+            temperature_now,
+            flash_default.get_hv(),
+            flash_default.get_ref_temp(),
+        );
+        self.flash_calib.set_hv(hv_now);
+        base::set_hvdac(&self.board, hv_now);
+
+        let delta_t = (self.flash_calib.get_ref_temp() - temperature_now).abs();
+        if delta_t > 2.0 {
+            self.flash_calib.set_ref_temp(temperature_now);
+            return true;
+        }
+        return false;
     }
 }
 
@@ -258,7 +301,7 @@ impl Default for SingleGeneratorBoardFSM {
             flash_calib: FlashData::default(),
             run_settings_local: RunSettings::default(),
             v_counter_last: 0,
-            tx_channel: None
+            tx_channel: None,
         }
     }
 }

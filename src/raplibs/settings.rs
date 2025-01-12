@@ -283,3 +283,20 @@ impl Default for RunSettings {
         }
     }
 }
+
+impl PartialEq for RunSettings {
+    fn eq(&self, other: &Self) -> bool {
+        self.num_of_dwords == other.num_of_dwords &&
+        self.afp_threshold == other.afp_threshold &&
+        self.sanity_fail_flag_latch_event_alarm_thr == other.sanity_fail_flag_latch_event_alarm_thr &&
+        self.mono_num_of_sequences_power_of_2 == other.mono_num_of_sequences_power_of_2 &&
+        self.mono_sequence_length_power_of_2 == other.mono_sequence_length_power_of_2 &&
+        self.mono_confidence_level_upper == other.mono_confidence_level_upper &&
+        self.mono_confidence_level_lower == other.mono_confidence_level_lower &&
+        self.asym_sequence_length_bits == other.asym_sequence_length_bits &&
+        self.runs_sequence_length == other.runs_sequence_length &&
+        self.runs_num_of_sequences_power_of_2 == other.runs_num_of_sequences_power_of_2 &&
+        self.runs_confidence_level == other.runs_confidence_level &&
+        self.sha256_reduction_ratio == other.sha256_reduction_ratio
+    }
+}

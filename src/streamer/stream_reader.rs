@@ -181,6 +181,7 @@ impl<'a, 'b> FifoReader<'a, 'b> {
             serial: self.serial_number.clone(),
             data: Some(DataType::Asym(asym)),
         };
+        println!("{:?}", asym_results);
         self.channel.send(asym_results).await;
         
         let monobit = self.request_monobit_results().await;

@@ -1,7 +1,6 @@
+#![allow(dead_code)]
 pub(crate) const SEED_LENGTH: usize = 2048 / 8;
 pub(crate) const BUFFER_SIZE: usize = SEED_LENGTH;
-pub(crate) const BUFFER_SIZE_32_BITS: usize = 4;
-pub(crate) const BUFFER_SIZE_64_BITS: usize = 8;
 pub(crate) const BUFFER_SIZE_FLUSHING: usize = 100000;
 pub(crate) const MAXIMUM_NUM_OF_DWORDS: usize = 0xffff;
 
