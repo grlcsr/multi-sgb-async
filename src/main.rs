@@ -39,6 +39,7 @@ async fn async_main() {
         serial_stream.sgb_mananger().await;
     });
 
+                // TODO!" Debug this thing of missing seeds and tests not received h
     while let Some(message) = rx.recv().await {
         println!("GOT = {:?}", message);
     }
