@@ -111,7 +111,6 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::TempCompensation => {
                     println!("Performing Temperature Compensation.");
-
                     if self.temperature_compensation() {
                         self.prepare_fifos().await;
                     }
@@ -130,7 +129,14 @@ impl SingleGeneratorBoardFSM {
                     self.state = StreamerState::ReadStream;
                 }
 
-                StreamerState::Termination => todo!(),
+                StreamerState::Termination => {
+                    println!("Terminating device.");
+                    base::stop(&self.board);
+                    self.flush_device().await;
+                    base::close(&self.board);
+                    break;
+                },
+
                 StreamerState::ErrorHandler => todo!(),
             }
         }

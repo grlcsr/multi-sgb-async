@@ -27,6 +27,10 @@ impl FtdiBoard {
         Ok(self.get_device().purge_all()?)
     }
 
+    pub fn close(&self) -> Result<(), FtdiBoardStatus> {
+        Ok(self.get_device().close()?)
+    }
+
     pub fn get_queue_status(&self) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().queue_status()?)
     }

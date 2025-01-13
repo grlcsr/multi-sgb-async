@@ -37,6 +37,10 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
     }
 }
 
+pub fn close(device: &FtdiBoard) -> Result<(), RapLibErrors> {
+    Ok(device.close()?)
+}
+
 pub fn hv_compensate(temperature_now: f32, hv_val:f32, ref_temp: f32) -> f32 {
     hv_val + (temperature_now - ref_temp) * 0.054
 }
