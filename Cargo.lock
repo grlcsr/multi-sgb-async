@@ -160,7 +160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "multi-sgb-async"
+name = "multi_sgb_async"
 version = "0.1.0"
 dependencies = [
  "binext",

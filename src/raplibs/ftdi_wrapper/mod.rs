@@ -1,6 +1,9 @@
 use core::time::Duration;
 use libftd2xx::{BitMode, DeviceStatus, FtStatus, Ftdi, FtdiCommon};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    fmt,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 #[derive(Debug)]
 pub struct FtdiBoard {
@@ -111,5 +114,33 @@ pub struct FtdiBoardStatus {
 impl From<FtStatus> for FtdiBoardStatus {
     fn from(x: FtStatus) -> FtdiBoardStatus {
         FtdiBoardStatus { err: x.to_string() }
+    }
+}
+
+impl std::fmt::Display for FtdiBoardStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error code: {}", self.err)
+    }
+}
+
+#[test]
+fn test_disconnection_board() {
+    let serial_number = "RNG46856";
+    let device = FtdiBoard::open_with_serial(serial_number);
+    match device {
+        Ok(dev) => {
+            let mut buf: [u8; 100] = [0; 100];
+            loop {
+                let x = dev.read(&mut buf);
+                match x {
+                    Ok(_) => continue,
+                    Err(f) => {
+                        println!("{}", f);
+                        break;
+                    }
+                }
+            }
+        }
+        Err(f) => println!("{}", f),
     }
 }

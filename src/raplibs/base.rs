@@ -20,7 +20,7 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
     if check_value == CHECK_VALUE && fw_version >= MIN_SUPPORTED_FIRMWARE_VERSION {
         println!("Communication OK: got value {:#010x}", check_value);
         println!(
-            "Firmware {:?} supported: minimum version required: {:?}, software version: {:?}.",
+            "Firmware {} supported: minimum version required: {}, software version: {}.",
             fw_version, MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION
         );
         Ok(())
@@ -31,7 +31,7 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
         )))
     } else {
         Err(RapLibErrors::BaseError(format!(
-            "Firmware {:?} NOT SUPPORTED: minimum version required: {:?}.",
+            "Firmware {:?} NOT SUPPORTED: minimum version required: {}.",
             fw_version, MIN_SUPPORTED_FIRMWARE_VERSION
         )))
     }

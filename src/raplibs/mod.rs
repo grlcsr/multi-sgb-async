@@ -7,47 +7,55 @@ pub(crate) mod settings;
 pub(crate) mod sha256;
 
 use std::fmt;
-use std::io::Error;
+use std::error::Error;
 use ftdi_wrapper::FtdiBoardStatus;
 
-#[derive(Debug)]
 pub enum RapLibErrors {
     FtdiStatus(FtdiBoardStatus),
     FlashError(String),
     BaseError(String),
-    SanityChecksError(String),
     Sha256Error(String),
     RunSettingsError(String),
+    UnhandledError(String),
+}
 
-    UnhandledError(Error)
+impl Error for RapLibErrors {}
+
+impl fmt::Debug for RapLibErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RapLibErrors::FtdiStatus(x) =>
+                write!(f, "FTDI Error: {}", x),
+            RapLibErrors::FlashError(x) =>
+                write!(f, "Flash Error: {}", x),
+            RapLibErrors::BaseError(x) =>
+                write!(f, "Base Error: {}", x),
+            RapLibErrors::Sha256Error(x) =>
+                write!(f, "Sha256 Error: {}", x),
+            RapLibErrors::RunSettingsError(x) =>
+                write!(f, "Run Settings Error: {}", x),
+            RapLibErrors::UnhandledError(..) =>
+                    write!(f, "Unhandled External Error. Please restart."),
+        }
+    }
 }
 
 impl fmt::Display for RapLibErrors {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RapLibErrors::FtdiStatus(x) =>
-                write!(f, "FTDI Error: {:?}", x),
+                write!(f, "FTDI Error: {}", x),
             RapLibErrors::FlashError(x) =>
-                write!(f, "Flash Error: {:?}", x),
+                write!(f, "Flash Error: {}", x),
             RapLibErrors::BaseError(x) =>
-                write!(f, "Base Error: {:?}", x),
-            RapLibErrors::SanityChecksError(x) =>
-                write!(f, "Sanity Check Error: {:?}", x),
+                write!(f, "Base Error: {}", x),
             RapLibErrors::Sha256Error(x) =>
-                write!(f, "Sha256 Error: {:?}", x),
+                write!(f, "Sha256 Error: {}", x),
             RapLibErrors::RunSettingsError(x) =>
-                write!(f, "Run Settings Error: {:?}", x),
-            
-            
-            RapLibErrors::UnhandledError(x)=>
-                write!(f, "Unhandled Error: origin unknown. Error code: {:?}", x),
+                write!(f, "Run Settings Error: {}", x),
+            RapLibErrors::UnhandledError(..) =>
+                    write!(f, "Unhandled External Error. Please restart."),
         }
-    }
-}
-
-impl From<Error> for RapLibErrors {
-    fn from(err: Error) -> RapLibErrors {
-        RapLibErrors::UnhandledError(err)
     }
 }
 

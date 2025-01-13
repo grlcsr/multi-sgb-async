@@ -21,6 +21,25 @@ pub enum DataType {
     Sha256(Vec<u8>)
 }
 
+macro_rules! impl_from_for_data_type {
+    ($($type:ty => $variant:ident),* $(,)?) => {
+        $(
+            impl From<$type> for DataType {
+                fn from(data: $type) -> Self {
+                    DataType::$variant(data)
+                }
+            }
+        )*
+    };
+}
+
+impl_from_for_data_type! {
+    Vec<i32> => Asym,
+    Vec<(f32, u32, u32)> => Monobit,
+    Vec<(f64, u32, u32)> => Runs,
+    Vec<u8> => Sha256,
+}
+
 #[derive(Debug)]
 pub struct StreamData {
     pub serial: String,

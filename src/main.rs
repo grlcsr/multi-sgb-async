@@ -1,5 +1,5 @@
-mod streamer;
-mod raplibs;
+pub mod streamer;
+pub mod raplibs;
 
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;

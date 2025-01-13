@@ -151,9 +151,13 @@ impl RunSettings {
     }
 
     pub fn set_run_settings(self) -> Result<(), RapLibErrors> {
-        self.check_run_settings_validity();
-        RUN_SETTINGS.lock().unwrap().clone_from(&self);
-        RunSettings::write_settings_to_file();
+        match self.check_run_settings_validity() {
+            Ok(_) => {
+                RUN_SETTINGS.lock().unwrap().clone_from(&self);
+                RunSettings::write_settings_to_file();
+            }
+            Err(f) => println!("{}", f),
+        }
         Ok(())
     }
 
@@ -169,11 +173,15 @@ impl RunSettings {
 
     fn read_run_settings_from_file() -> Result<RunSettings, RapLibErrors> {
         let run_settings_path: &str = "./run_settings.bin";
-        let mut read_file = OpenOptions::new().read(true).open(run_settings_path)?;
-
-        Ok(read_file
-            .read_binary::<RunSettings>()
-            .expect("Failed to unwrap binary run_settings.bin"))
+        if let Ok(mut read_file) = OpenOptions::new().read(true).open(run_settings_path) {
+            if let Ok(run_settings) = read_file.read_binary::<RunSettings>() {
+                Ok(run_settings)
+            } else {
+                Err(RapLibErrors::RunSettingsError("Cannot read run_settings.bin".to_string()))
+            }
+        } else {
+            Err(RapLibErrors::RunSettingsError("Cannot read run_settings.bin".to_string()))
+        }
     }
 
     fn write_settings_to_file() {

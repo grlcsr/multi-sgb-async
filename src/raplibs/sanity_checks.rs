@@ -102,6 +102,7 @@ pub fn req_read_runs_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     Ok(device.write(cmd, value)?)
 }
 
+#[allow(dead_code)]
 pub fn req_read_runs_stats(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqReadRunsFlagLatches as u8;
     let value: u16 = 0;

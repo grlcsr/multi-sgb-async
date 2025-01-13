@@ -1,8 +1,11 @@
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, StreamExt};
+
+use crate::raplibs::RapLibErrors;
 
 use super::{base, global_data::*, sanity_checks, sha256, FlashData, FtdiBoard};
 
@@ -39,17 +42,16 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         }
     }
 
-    pub async fn generate_packet(&mut self) {
-        base::request_raw_tdc_words(self.board, self.max_dwords);
+    pub async fn generate_packet(&mut self) -> Result<(), RapLibErrors> {
+        base::request_raw_tdc_words(self.board, self.max_dwords)?;
         let mut num_seeds = self.max_dwords as i32 * 4 / SEED_LENGTH as i32;
 
         loop {
             if num_seeds == 0 {
-                break;
+                return Ok(());
             }
 
-            match self.next().await {
-                //TODO! Change to try next and return Result<usize, Err>
+            match self.try_next().await? {
                 Some(read_buf) => {
                     let _nist_tests = self.nist_tests(&read_buf).await;
                     let stream_results = StreamData {
@@ -66,7 +68,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     num_seeds -= 1;
                     println!("Missing seeds: {}", num_seeds);
                 }
-                None => break,
+                None => return Err(RapLibErrors::BaseError("Generation timed out.".to_string())),
             }
         }
     }
@@ -126,7 +128,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
 }
 
 impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
-    type Item = [u8; BUFFER_SIZE];
+    type Item = Result<[u8; BUFFER_SIZE], RapLibErrors>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if Instant::now().duration_since(self.last_poll_time) > self.timeout {
@@ -134,13 +136,13 @@ impl<'a, 'b> Stream for PacketGenerator<'a, 'b> {
             return Poll::Ready(None);
         }
 
-        let rx = self.board.get_queue_status().unwrap();
+        let rx = self.board.get_queue_status()?;
         if rx >= 0x100 {
             let mut read_buf: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-            let _bytes_read = self.board.read(&mut read_buf).unwrap();
+            let _bytes_read = self.board.read(&mut read_buf)?;
 
             self.last_poll_time = Instant::now();
-            return Poll::Ready(Some(read_buf));
+            return Poll::Ready(Some(Ok(read_buf)));
         }
 
         let waker = cx.waker().clone();
@@ -175,59 +177,50 @@ impl<'a, 'b> FifoReader<'a, 'b> {
         }
     }
 
-    pub async fn read_fifo_results(&mut self) {
-        let asym = self.request_asymmetry_results().await;
-        let asym_results = StreamData {
-            serial: self.serial_number.clone(),
-            data: Some(DataType::Asym(asym)),
-        };
-        self.channel.send(asym_results).await;
-        
-        let monobit = self.request_monobit_results().await;
-        let monobit_results = StreamData {
-            serial: self.serial_number.clone(),
-            data: Some(DataType::Monobit(monobit)),
-        };
-        self.channel.send(monobit_results).await;
-        
-        let runs = self.request_runs_results().await;
-        let runs_results = StreamData {
-            serial: self.serial_number.clone(),
-            data: Some(DataType::Runs(runs)),
-        };
-        self.channel.send(runs_results).await;
-
-        let sha = self.request_sha256_results().await;
-        let sha_results = StreamData {
-            serial: self.serial_number.clone(),
-            data: Some(DataType::Sha256(sha)),
-        };
-        self.channel.send(sha_results).await;
+    pub async fn read_fifo_results(&mut self) -> Result<(), RapLibErrors> {
+        async fn send_result<T: Into<DataType>>(
+            serial: &str,
+            request: impl Future<Output = Result<T, RapLibErrors>>,
+            channel: &mpsc::Sender<StreamData>,
+        ) -> Result<(), RapLibErrors> {
+            let result = request.await?;
+            let stream_data = StreamData {
+                serial: serial.to_string(),
+                data: Some(result.into()),
+            };
+            channel
+                .send(stream_data)
+                .await
+                .map_err(|f| RapLibErrors::UnhandledError(format!("Unhandled external error: {:?}", f)))
+        }
+    
+        send_result(&self.serial_number, self.request_asymmetry_results(), &self.channel).await?;
+        send_result(&self.serial_number, self.request_monobit_results(), &self.channel).await?;
+        send_result(&self.serial_number, self.request_runs_results(), &self.channel).await?;
+        send_result(&self.serial_number, self.request_sha256_results(), &self.channel).await?;
+    
+        Ok(())
     }
 
-    async fn request_asymmetry_results(&mut self) -> Vec<i32> {
+    async fn request_asymmetry_results(&self) -> Result<Vec<i32>, RapLibErrors> {
         let mut asym_buffer: Vec<i32> = Vec::new();
-        sanity_checks::req_read_asym_fifo(self.board);
+        sanity_checks::req_read_asym_fifo(self.board)?;
 
-        loop {
-            let value_read = async { self.board.read_32_bit_u32().unwrap() }.await;
-
+        while let Ok(value_read) = async { self.board.read_32_bit_u32() }.await {
             if (value_read & 0x80000000) == 0 {
                 asym_buffer.push(sanity_checks::signed_int_to_dec(value_read));
             } else {
                 break;
             }
         }
-        asym_buffer
+        Ok(asym_buffer)
     }
 
-    async fn request_monobit_results(&mut self) -> Vec<(f32, u32, u32)> {
+    async fn request_monobit_results(&self) -> Result<Vec<(f32, u32, u32)>, RapLibErrors> {
         let mut monobit_buffer: Vec<(f32, u32, u32)> = Vec::new();
-        sanity_checks::req_read_monobit_fifo(self.board);
+        sanity_checks::req_read_monobit_fifo(self.board)?;
 
-        loop {
-            let value_read: u32 = async { self.board.read_32_bit_u32().unwrap() }.await;
-
+        while let Ok(value_read) = async { self.board.read_32_bit_u32() }.await {
             if (value_read & 0x80000000) == 0 {
                 let sn_mean_value: f32 =
                     sanity_checks::fxp_to_flp_smpl((value_read & 0x1ffffff) as i32, 10.0);
@@ -239,16 +232,14 @@ impl<'a, 'b> FifoReader<'a, 'b> {
                 break;
             }
         }
-        monobit_buffer
+        Ok(monobit_buffer)
     }
 
-    async fn request_runs_results(&mut self) -> Vec<(f64, u32, u32)> {
+    async fn request_runs_results(&self) -> Result<Vec<(f64, u32, u32)>, RapLibErrors> {
         let mut runs_buffer: Vec<(f64, u32, u32)> = Vec::new();
-        sanity_checks::req_read_runs_fifo(self.board);
+        sanity_checks::req_read_runs_fifo(self.board)?;
 
-        loop {
-            let value_read: u64 = async { self.board.read_64_bit_u64().unwrap() }.await;
-
+        while let Ok(value_read) = async { self.board.read_64_bit_u64() }.await {
             if (value_read & 0x8000000000000000) == 0 {
                 let signed_z_val_fxp: u64 = value_read & 0xFFFFFFFFFFFFF;
 
@@ -261,15 +252,15 @@ impl<'a, 'b> FifoReader<'a, 'b> {
                 break;
             }
         }
-        runs_buffer
+        Ok(runs_buffer)
     }
 
-    async fn request_sha256_results(&mut self) -> Vec<u8> {
-        sha256::req_read_sha256_fifo(self.board);
-        let words_in_fpga: usize = self.board.read_32_bit_u32().unwrap() as usize;
+    async fn request_sha256_results(&self) -> Result<Vec<u8>, RapLibErrors> {
+        sha256::req_read_sha256_fifo(self.board)?;
+        let words_in_fpga: usize = self.board.read_32_bit_u32()? as usize;
         let mut sha_results: [u8; MAXIMUM_NUM_OF_DWORDS*4] = [0; MAXIMUM_NUM_OF_DWORDS*4];
-        let _ = self.board.read(&mut sha_results);
-        sha_results[..words_in_fpga].to_vec()
+        let _ = self.board.read(&mut sha_results)?;
+        Ok(sha_results[..words_in_fpga].to_vec())
     }
 }
 
@@ -290,22 +281,21 @@ impl<'a> FlushDevice<'a> {
         }
     }
 
-    pub async fn flush_device(&mut self) -> usize {
+    pub async fn flush_device(&mut self) -> Result<usize, RapLibErrors> {
         let mut total_cleaned_bytes: usize = 0;
 
         loop {
-            match self.next().await {
-                //TODO! Change to try next and return Result<usize, Err>
+            match self.try_next().await? {
                 Some(read_bytes) => total_cleaned_bytes += read_bytes,
                 None => break,
             }
         }
-        total_cleaned_bytes
+        Ok(total_cleaned_bytes)
     }
 }
 
 impl<'a> Stream for FlushDevice<'a> {
-    type Item = usize;
+    type Item = Result<usize, RapLibErrors>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if Instant::now().duration_since(self.last_poll_time) > self.timeout {
@@ -313,12 +303,12 @@ impl<'a> Stream for FlushDevice<'a> {
             return Poll::Ready(None);
         }
 
-        if self.board.get_queue_status().unwrap() > 0 {
+        if self.board.get_queue_status()? > 0 {
             let mut read_buf: [u8; BUFFER_SIZE_FLUSHING] = [0; BUFFER_SIZE_FLUSHING];
-            let bytes_read = self.board.read(&mut read_buf).unwrap();
+            let bytes_read = self.board.read(&mut read_buf)?;
 
             self.last_poll_time = Instant::now();
-            return Poll::Ready(Some(bytes_read));
+            return Poll::Ready(Some(Ok(bytes_read)));
         }
 
         cx.waker().wake_by_ref();
@@ -346,8 +336,8 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         }
     }
 
-    pub async fn perform_temperature_stabilization(&mut self) {
-        let mut temperature_now: f32 = base::req_temperature(self.board).unwrap();
+    pub async fn perform_temperature_stabilization(&mut self) -> Result<(), RapLibErrors> {
+        let mut temperature_now: f32 = base::req_temperature(self.board)?;
         let mut delta_t = f32::abs(self.flash_data.get_ref_temp() - temperature_now);
 
         println!(
@@ -357,7 +347,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
             delta_t
         );
 
-        self.set_gate_dcr();
+        self.set_gate_dcr()?;
 
         while delta_t > 0.5 {
             async {
@@ -365,8 +355,8 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
                 let mut dcr_now: f32 = 0.0;
 
                 for _i in 0..5 {
-                    base::req_read_dcr(self.board);
-                    match self.next().await {
+                    base::req_read_dcr(self.board)?;
+                    match self.try_next().await? {
                         //TODO! Change to try next and return Result<usize, Err>
                         Some(dcr) => {
                             println!("Temperature stabilization iteration {}; got DCR: {}.", _i, dcr);
@@ -376,25 +366,27 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
                     }
                 }
 
-                temperature_now = base::req_temperature(self.board).unwrap();
+                temperature_now = base::req_temperature(self.board)?;
                 delta_t = temperature_now - temperature_old;
                 println!("Temperature stabilization: DCR [KHz] = {}; temperature_old = {}; temperature_now = {}, delta_t = {}.", dcr_now, temperature_old, temperature_now, delta_t);
-            }.await
+                Ok::<(), RapLibErrors>(())
+            }.await?;
         }
 
         self.flash_data.set_ref_temp(temperature_now);
+        Ok(())
     }
 
-    fn set_gate_dcr(&mut self) {
+    fn set_gate_dcr(&mut self) -> Result<usize, RapLibErrors> {
         // read the DCR; 2 = 1 second gate for pulse counting
         //               1 = 10 seconds
         let value = 1;
-        base::set_gate_dcr(self.board, value);
+        Ok(base::set_gate_dcr(self.board, value)?)
     }
 }
 
 impl<'a, 'b> Stream for TemperatureStabilizer<'a, 'b> {
-    type Item = u32;
+    type Item = Result<u32, RapLibErrors>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if Instant::now().duration_since(self.last_poll_time) > self.timeout {
@@ -402,10 +394,10 @@ impl<'a, 'b> Stream for TemperatureStabilizer<'a, 'b> {
             return Poll::Ready(None);
         }
 
-        let dword: u32 = self.board.read_32_bit_u32().unwrap();
+        let dword: u32 = self.board.read_32_bit_u32()?;
         if dword > 0 {
             self.last_poll_time = Instant::now();
-            return Poll::Ready(Some(dword));
+            return Poll::Ready(Some(Ok(dword)));
         }
 
         let waker = cx.waker().clone();

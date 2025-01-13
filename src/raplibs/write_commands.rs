@@ -1,5 +1,4 @@
-// FPGA COMMANDS FOR WRITE FUNCTION (almost all of them)
-#[derive(Debug)]
+#[allow(dead_code)]
 #[repr(u8)]
 pub enum WriteCommands {
     ReqStop = 0x00,
