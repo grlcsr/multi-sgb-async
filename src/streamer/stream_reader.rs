@@ -63,10 +63,13 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                         ))),
                     };
 
-                    self.channel.send(stream_results).await;
-
-                    num_seeds -= 1;
-                    println!("Missing seeds: {}", num_seeds);
+                    match self.channel.send(stream_results).await {
+                        Ok(_) => {
+                            num_seeds -= 1;
+                            println!("Missing seeds: {}", num_seeds);
+                        }
+                        Err(_) => return Err(RapLibErrors::UnhandledError("generate_packet: unhandled error while generating.".to_string())),
+                    }
                 }
                 None => return Err(RapLibErrors::BaseError("Generation timed out.".to_string())),
             }
@@ -188,17 +191,36 @@ impl<'a, 'b> FifoReader<'a, 'b> {
                 serial: serial.to_string(),
                 data: Some(result.into()),
             };
-            channel
-                .send(stream_data)
-                .await
-                .map_err(|f| RapLibErrors::UnhandledError(format!("Unhandled external error: {:?}", f)))
+            channel.send(stream_data).await.map_err(|f| {
+                RapLibErrors::UnhandledError(format!("Unhandled external error: {:?}", f))
+            })
         }
-    
-        send_result(&self.serial_number, self.request_asymmetry_results(), &self.channel).await?;
-        send_result(&self.serial_number, self.request_monobit_results(), &self.channel).await?;
-        send_result(&self.serial_number, self.request_runs_results(), &self.channel).await?;
-        send_result(&self.serial_number, self.request_sha256_results(), &self.channel).await?;
-    
+
+        send_result(
+            &self.serial_number,
+            self.request_asymmetry_results(),
+            &self.channel,
+        )
+        .await?;
+        send_result(
+            &self.serial_number,
+            self.request_monobit_results(),
+            &self.channel,
+        )
+        .await?;
+        send_result(
+            &self.serial_number,
+            self.request_runs_results(),
+            &self.channel,
+        )
+        .await?;
+        send_result(
+            &self.serial_number,
+            self.request_sha256_results(),
+            &self.channel,
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -258,7 +280,7 @@ impl<'a, 'b> FifoReader<'a, 'b> {
     async fn request_sha256_results(&self) -> Result<Vec<u8>, RapLibErrors> {
         sha256::req_read_sha256_fifo(self.board)?;
         let words_in_fpga: usize = self.board.read_32_bit_u32()? as usize;
-        let mut sha_results: [u8; MAXIMUM_NUM_OF_DWORDS*4] = [0; MAXIMUM_NUM_OF_DWORDS*4];
+        let mut sha_results: [u8; MAXIMUM_NUM_OF_DWORDS * 4] = [0; MAXIMUM_NUM_OF_DWORDS * 4];
         let _ = self.board.read(&mut sha_results)?;
         Ok(sha_results[..words_in_fpga].to_vec())
     }

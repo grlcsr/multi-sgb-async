@@ -137,10 +137,16 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::TempCompensation => {
                     println!("Performing Temperature Compensation.");
-                    if self.temperature_compensation() {
-                        self.prepare_fifos().await;
-                    }
 
+                    match self.temperature_compensation() {
+                        Ok(true) => err = self.prepare_fifos().await,
+                        Err(_) => {
+                            self.state = StreamerState::ErrorHandler;
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    
                     self.state = StreamerState::CheckSettings;
                 }
 
@@ -315,23 +321,23 @@ impl SingleGeneratorBoardFSM {
         Ok(())
     }
 
-    fn temperature_compensation(&mut self) -> bool {
+    fn temperature_compensation(&mut self) -> Result<bool, RapLibErrors> {
         let flash_default = self.flash_default;
-        let temperature_now = base::req_temperature(&self.board).unwrap();
+        let temperature_now = base::req_temperature(&self.board)?;
         let hv_now = base::hv_compensate(
             temperature_now,
             flash_default.get_hv(),
             flash_default.get_ref_temp(),
         );
         self.flash_calib.set_hv(hv_now);
-        base::set_hvdac(&self.board, hv_now);
+        base::set_hvdac(&self.board, hv_now)?;
 
         let delta_t = (self.flash_calib.get_ref_temp() - temperature_now).abs();
         if delta_t > 2.0 {
             self.flash_calib.set_ref_temp(temperature_now);
-            return true;
+            return Ok(true);
         }
-        return false;
+        return Ok(false);
     }
 }
 
