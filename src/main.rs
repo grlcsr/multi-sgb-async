@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
 use raplibs::settings::RunSettings;
-use streamer::global_data::StreamData;
+use streamer::global_data::{DataType, StreamData};
 use streamer::SingleGeneratorBoardFSM;
 
 fn main() {
@@ -39,9 +39,13 @@ async fn async_main() {
         serial_stream.sgb_mananger().await;
     });
 
-                // TODO!" Debug this thing of missing seeds and tests not received h
     while let Some(message) = rx.recv().await {
-        println!("GOT = {:?}", message);
+        match message.data {
+            Some(DataType::RawStream(x)) => continue,
+            Some(x) => println!("GOT = {:?}", x),
+            None => continue
+        }
+        
     }
 
     use tokio::time::Duration;
