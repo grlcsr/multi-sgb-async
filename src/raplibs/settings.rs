@@ -356,7 +356,13 @@ impl RunSettings {
         let limits = HwLimits::get_hw_limits()?;
         let mut step = 0x100;
         let mut current_dw = 0x0000;
-        let mut state = "search_coarse";
+        
+        enum State {
+            SearchCoarse,
+            BackSearch,
+        }
+        
+        let mut state = State::SearchCoarse;
 
         let bits_per_entry = {
             let mono = 2_i32.pow(self.get_mono_sequence_length_power_of_2() as u32)
@@ -381,19 +387,19 @@ impl RunSettings {
                 || limits_reached.3
                 || limits_reached.4;
 
-            match (state, limit_reached) {
-                ("search_coarse", true) => {
-                    state = "backsearch_fine";
+            match (&state, limit_reached) {
+                (&State::SearchCoarse, true) => {
+                    state = State::BackSearch;
                     step = -step;
                 }
-                ("backsearch_fine", false) => break,
+                (&State::BackSearch, false) => break,
                 _ => {}
             }
 
             current_dw += step;
         }
 
-        self.log_results(current_dw, fifo_usages, step, &HwLimits::get_hw_limits()?)?;
+        self.log_results(current_dw, fifo_usages, -step, &HwLimits::get_hw_limits()?)?;
         Ok(current_dw as u16)
     }
 
