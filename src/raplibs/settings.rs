@@ -286,7 +286,10 @@ impl RunSettings {
             println!("- num_of_dwords must be a multiple of 0x100. Computing value.");
             let optimal_dwords = self.calculate_optimal_num_of_dwords()?;
             self.set_num_of_dwords(optimal_dwords);
-            println!("- num_of_dwords value computed to be (0x{:04x})", optimal_dwords);
+            println!(
+                "- num_of_dwords value computed to be (0x{:04x})",
+                optimal_dwords
+            );
         }
 
         if self.mono_sequence_length_power_of_2 < 2 || self.mono_sequence_length_power_of_2 > 11 {
@@ -349,130 +352,100 @@ impl RunSettings {
         Ok(())
     }
 
-    fn calculate_optimal_num_of_dwords(& mut self) -> Result<u16, RapLibErrors> {
+    fn calculate_optimal_num_of_dwords(&mut self) -> Result<u16, RapLibErrors> {
+        let limits = HwLimits::get_hw_limits()?;
         let mut step = 0x100;
-
-        let bits_per_entry_mono = 2_i32.pow(self.get_mono_sequence_length_power_of_2() as u32)
-            * 2_i32.pow(self.get_mono_num_of_sequences_power_of_2() as u32);
-        let bits_per_entry_runs = 22_i32.pow(self.get_runs_sequence_length() as u32)
-            * 2_i32.pow(self.get_runs_num_of_sequences_power_of_2() as u32);
-        let bits_per_entry_asym = 4 * self.get_asym_sequence_length_bits() as i32;
-        let bits_per_entry_sha256 = 256 * self.get_sha256_reduction_ratio() as i32;
-
-        let mono_words_per_entry = 1;
-        let runs_words_per_entry = 1;
-        let asym_words_per_entry = 1;
-        let sha256_words_per_entry = 8;
-
         let mut current_dw = 0x0000;
-
-        let mut limit_due_to_mono = false;
-        let mut limit_due_to_runs = false;
-        let mut limit_due_to_asym = false;
-        let mut limit_due_to_sha256 = false;
-        let mut limit_due_to_hw = false;
-
         let mut state = "search_coarse";
 
-        let mut generated_bits: i32;
-        let mut mono_fifo_usage: i32;
-        let mut runs_fifo_usage: i32;
-        let mut asym_fifo_usage: i32;
-        let mut sha256_fifo_usage: i32;
+        let bits_per_entry = {
+            let mono = 2_i32.pow(self.get_mono_sequence_length_power_of_2() as u32)
+                * 2_i32.pow(self.get_mono_num_of_sequences_power_of_2() as u32);
+            let runs = 22_i32.pow(self.get_runs_sequence_length() as u32)
+                * 2_i32.pow(self.get_runs_num_of_sequences_power_of_2() as u32);
+            let asym = 4 * self.get_asym_sequence_length_bits() as i32;
+            let sha256 = 256 * self.get_sha256_reduction_ratio() as i32;
+            (mono, runs, asym, sha256)
+        };
+        let words_per_entry = (1, 1, 1, 8);
 
+        let mut fifo_usages;
         loop {
-            let mut limit_reached = false;
-            generated_bits = current_dw * 32;
-            mono_fifo_usage = generated_bits / bits_per_entry_mono * mono_words_per_entry;
-            runs_fifo_usage = generated_bits / bits_per_entry_runs * runs_words_per_entry;
-            asym_fifo_usage = generated_bits / bits_per_entry_asym * asym_words_per_entry;
-            sha256_fifo_usage = generated_bits / bits_per_entry_sha256 * sha256_words_per_entry;
+            let generated_bits = current_dw * 32;
+            fifo_usages = calculate_fifo_usages(generated_bits, bits_per_entry, words_per_entry);
+            let limits_reached: (bool, bool, bool, bool, bool) =
+                check_limits(fifo_usages, limits, current_dw);
+            let limit_reached = limits_reached.0
+                || limits_reached.1
+                || limits_reached.2
+                || limits_reached.3
+                || limits_reached.4;
 
-            if mono_fifo_usage > (HwLimits::get_hw_limits()?).mono() {
-                // && enabled_accelerators_dict["mono"]["acq"]:
-                limit_due_to_mono = true;
-                limit_reached = true;
-            }
-            if runs_fifo_usage > (HwLimits::get_hw_limits()?).runs() {
-                // && enabled_accelerators_dict["runs"]["acq"]:
-                limit_due_to_runs = true;
-                limit_reached = true;
-            }
-            if asym_fifo_usage > (HwLimits::get_hw_limits()?).asym() {
-                // && enabled_accelerators_dict["asym"]["acq"]:
-                limit_due_to_asym = true;
-                limit_reached = true;
+            match (state, limit_reached) {
+                ("search_coarse", true) => {
+                    state = "backsearch_fine";
+                    step = -step;
+                }
+                ("backsearch_fine", false) => break,
+                _ => {}
             }
 
-            if sha256_fifo_usage > (HwLimits::get_hw_limits()?).sha256() {
-                // &&enabled_accelerators_dict["sha256"]["acq_save"]:
-                limit_due_to_sha256 = true;
-                limit_reached = true;
-            }
-
-            if current_dw > MAXIMUM_NUM_OF_DWORDS as i32 {
-                limit_due_to_hw = true;
-                limit_reached = true;
-            }
-
-            if state == "search_coarse" && limit_reached {
-                state = "backsearch_fine";
-                step = -step;
-            }
-
-            if state == "backsearch_fine" && !limit_reached {
-                break;
-            }
-
-            current_dw += step
+            current_dw += step;
         }
+
+        self.log_results(current_dw, fifo_usages, step, &HwLimits::get_hw_limits()?)?;
+        Ok(current_dw as u16)
+    }
+
+    fn log_results(
+        &self,
+        current_dw: i32,
+        fifo_usages: (i32, i32, i32, i32),
+        step: i32,
+        limits: &HwLimits,
+    ) -> Result<(), RapLibErrors> {
+        let (mono_usage, runs_usage, asym_usage, sha256_usage) = fifo_usages;
 
         println!(
             "Found max number of dwords: {} (0x{:04x})",
-            current_dw, current_dw,
+            current_dw, current_dw
         );
-
-        fn is_active(val: bool) -> String {
-            if val {
-                return "+".to_string();
-            }
-            return " ".to_string();
-        }
-
         println!(
             " + HW    : {},\tusage: {},\tlimit: {}",
-            limit_due_to_hw, current_dw, MAXIMUM_NUM_OF_DWORDS
+            current_dw + step > MAXIMUM_NUM_OF_DWORDS as i32,
+            current_dw,
+            MAXIMUM_NUM_OF_DWORDS
         );
         println!(
             " {} SHA256: {},\tusage: {},\tlimit: {}",
-            is_active(self.sha256_active),
-            limit_due_to_sha256,
-            sha256_fifo_usage,
-            (HwLimits::get_hw_limits()?).sha256()
+            if self.sha256_active { "+" } else { " " },
+            sha256_usage + step > limits.sha256(),
+            sha256_usage,
+            limits.sha256()
         );
         println!(
             " {} MONO  : {},\tusage: {},\tlimit: {}",
-            is_active(self.mono_active),
-            limit_due_to_mono,
-            mono_fifo_usage,
-            (HwLimits::get_hw_limits()?).mono()
+            if self.mono_active { "+" } else { " " },
+            mono_usage + step > limits.mono(),
+            mono_usage,
+            limits.mono()
         );
         println!(
             " {} RUNS  : {},\tusage: {},\tlimit: {}",
-            is_active(self.runs_active),
-            limit_due_to_runs,
-            runs_fifo_usage,
-            (HwLimits::get_hw_limits()?).runs()
+            if self.runs_active { "+" } else { " " },
+            runs_usage + step > limits.runs(),
+            runs_usage,
+            limits.runs()
         );
         println!(
             " {} ASYM  : {},\tusage: {},\tlimit: {}",
-            is_active(self.asym_active),
-            limit_due_to_asym,
-            asym_fifo_usage,
-            (HwLimits::get_hw_limits()?).asym()
+            if self.asym_active { "+" } else { " " },
+            asym_usage + step > limits.asym(),
+            asym_usage,
+            limits.asym()
         );
 
-        Ok(current_dw as u16)
+        Ok(())
     }
 }
 
@@ -531,4 +504,35 @@ impl HwLimits {
     pub fn asym(&self) -> i32 {
         self.asym_fifo
     }
+}
+
+// Helper functions
+fn calculate_fifo_usages(
+    generated_bits: i32,
+    bits_per_entry: (i32, i32, i32, i32),
+    words_per_entry: (i32, i32, i32, i32),
+) -> (i32, i32, i32, i32) {
+    let (mono, runs, asym, sha256) = bits_per_entry;
+    let (mono_words, runs_words, asym_words, sha256_words) = words_per_entry;
+    (
+        generated_bits / mono * mono_words,
+        generated_bits / runs * runs_words,
+        generated_bits / asym * asym_words,
+        generated_bits / sha256 * sha256_words,
+    )
+}
+
+fn check_limits(
+    fifo_usages: (i32, i32, i32, i32),
+    limits: HwLimits,
+    current_dw: i32,
+) -> (bool, bool, bool, bool, bool) {
+    let (mono_usage, runs_usage, asym_usage, sha256_usage) = fifo_usages;
+    (
+        mono_usage > limits.mono(),
+        runs_usage > limits.runs(),
+        asym_usage > limits.asym(),
+        sha256_usage > limits.sha256(),
+        current_dw > MAXIMUM_NUM_OF_DWORDS as i32,
+    )
 }
