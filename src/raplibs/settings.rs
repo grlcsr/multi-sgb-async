@@ -282,16 +282,6 @@ impl RunSettings {
         let mut msg: String = "".to_string();
         let mut err: bool = false;
 
-        if self.num_of_dwords % 0x100 != 0 {
-            println!("- num_of_dwords must be a multiple of 0x100. Computing value.");
-            let optimal_dwords = self.calculate_optimal_num_of_dwords()?;
-            self.set_num_of_dwords(optimal_dwords);
-            println!(
-                "- num_of_dwords value computed to be (0x{:04x})",
-                optimal_dwords
-            );
-        }
-
         if self.mono_sequence_length_power_of_2 < 2 || self.mono_sequence_length_power_of_2 > 11 {
             err = true;
             msg += "- mono_sequence_length_power_of_2 out of range: it must be within range <2; 11>.\n";
@@ -348,6 +338,16 @@ impl RunSettings {
         if err {
             return Err(RapLibErrors::SettingsError(msg.to_string()));
         }
+        
+        if self.num_of_dwords % 0x100 != 0 {
+            println!("- num_of_dwords must be a multiple of 0x100. Computing value.");
+            let optimal_dwords = self.calculate_optimal_num_of_dwords()?;
+            self.set_num_of_dwords(optimal_dwords);
+            println!(
+                "- num_of_dwords value computed to be (0x{:04x})",
+                optimal_dwords
+            );
+        }
 
         Ok(())
     }
@@ -361,7 +361,7 @@ impl RunSettings {
             SearchCoarse,
             BackSearch,
         }
-        
+
         let mut state = State::SearchCoarse;
 
         let bits_per_entry = {
