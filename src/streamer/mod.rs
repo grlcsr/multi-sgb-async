@@ -146,7 +146,7 @@ impl SingleGeneratorBoardFSM {
                         }
                         _ => {}
                     }
-                    
+
                     self.state = StreamerState::CheckSettings;
                 }
 
@@ -265,7 +265,7 @@ impl SingleGeneratorBoardFSM {
                 return Ok(());
             }
         }
-        Err(RapLibErrors::BaseError(
+        Err(RapLibErrors::StreamerError(
             "Cannot reset to a known state".to_string(),
         ))
     }
@@ -281,7 +281,7 @@ impl SingleGeneratorBoardFSM {
         loop {
             let v_counter_diff: Result<i32, RapLibErrors> = async {
                 base::write_pack(&mut self.board, 4, 0)?;
-                let v_counter: i32 = self.board.read_32_bit_u32()? as i32; // TODO Error handling
+                let v_counter: i32 = self.board.read_32_bit_u32()? as i32;
                 let mut v_counter_diff = v_counter - self.v_counter_last;
 
                 if v_counter_diff < 0 {

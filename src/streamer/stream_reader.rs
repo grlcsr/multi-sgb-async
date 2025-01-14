@@ -9,8 +9,6 @@ use crate::raplibs::RapLibErrors;
 
 use super::{base, global_data::*, sanity_checks, sha256, FlashData, FtdiBoard};
 
-// TODO: HANDLING OF ERRORS -> PROPAGATE BACK TO MOD.RS AND IN CASE OF ERROR SHUT DOWN STREAM
-
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
     serial_number: String,
@@ -71,7 +69,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                         Err(_) => return Err(RapLibErrors::UnhandledError("generate_packet: unhandled error while generating.".to_string())),
                     }
                 }
-                None => return Err(RapLibErrors::BaseError("Generation timed out.".to_string())),
+                None => return Err(RapLibErrors::StreamerError("Generation timed out.".to_string())),
             }
         }
     }
@@ -379,12 +377,11 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
                 for _i in 0..5 {
                     base::req_read_dcr(self.board)?;
                     match self.try_next().await? {
-                        //TODO! Change to try next and return Result<usize, Err>
                         Some(dcr) => {
                             println!("Temperature stabilization iteration {}; got DCR: {}.", _i, dcr);
                             dcr_now = dcr as f32 / 10000.0;
                         }
-                        None => break, // TODO this should not happen
+                        None => return Err(RapLibErrors::StreamerError("Temperature Stabilization failed.".to_string()))
                     }
                 }
 

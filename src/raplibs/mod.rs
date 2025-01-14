@@ -12,10 +12,8 @@ use ftdi_wrapper::FtdiBoardStatus;
 
 pub enum RapLibErrors {
     FtdiStatus(FtdiBoardStatus),
-    FlashError(String),
-    BaseError(String),
-    Sha256Error(String),
-    RunSettingsError(String),
+    SettingsError(String),
+    StreamerError(String),
     UnhandledError(String)
 }
 
@@ -26,14 +24,10 @@ impl fmt::Debug for RapLibErrors {
         match self {
             RapLibErrors::FtdiStatus(x) =>
                 format!("FTDI Error: {}", x).fmt(f),
-            RapLibErrors::FlashError(x) =>
-                format!("Flash Error: {}", x).fmt(f),
-            RapLibErrors::BaseError(x) =>
-                format!("Base Error: {}", x).fmt(f),
-            RapLibErrors::Sha256Error(x) =>
-                format!("Sha256 Error: {}", x).fmt(f),
-            RapLibErrors::RunSettingsError(x) =>
-                format!("Run Settings Error: {}", x).fmt(f),
+            RapLibErrors::StreamerError(x) =>
+                format!("Streamer Error: {}", x).fmt(f),
+            RapLibErrors::SettingsError(x) =>
+                format!("Settings Error: {}", x).fmt(f),
             RapLibErrors::UnhandledError(..) => "Unhandled External Error. Please restart.".fmt(f),
         }
     }
@@ -45,10 +39,8 @@ impl fmt::Display for RapLibErrors {
             "{}", 
             match self {
                 RapLibErrors::FtdiStatus(x) => format!("FTDI Error: {}", x),
-                RapLibErrors::FlashError(x) => format!("Flash Error: {}", x),
-                RapLibErrors::BaseError(x) => format!("Base Error: {}", x),
-                RapLibErrors::Sha256Error(x) => format!("Sha256 Error: {}", x),
-                RapLibErrors::RunSettingsError(x) => format!("Run Settings Error: {}", x),
+                RapLibErrors::StreamerError(x) => format!("Streamer Error: {}", x),
+                RapLibErrors::SettingsError(x) => format!("Settings Error: {}", x),
                 RapLibErrors::UnhandledError(..) => format!("Unhandled External Error. Please restart."),
         })
     }

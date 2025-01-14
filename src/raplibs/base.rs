@@ -25,12 +25,12 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
         );
         Ok(())
     } else if check_value != CHECK_VALUE {
-        Err(RapLibErrors::BaseError(format!(
+        Err(RapLibErrors::StreamerError(format!(
             "Communication NOT OK: received check_value: {:#010x} expected value: {:#010x}",
             check_value, CHECK_VALUE
         )))
     } else {
-        Err(RapLibErrors::BaseError(format!(
+        Err(RapLibErrors::StreamerError(format!(
             "Firmware {:?} NOT SUPPORTED: minimum version required: {}.",
             fw_version, MIN_SUPPORTED_FIRMWARE_VERSION
         )))
@@ -84,7 +84,7 @@ pub fn req_temperature(device: &FtdiBoard) -> Result<f32, RapLibErrors> {
 
     if !(-20.0..=100.0).contains(&temperature) {
         let msg: String = format!("Read temperature error: temp measured = {:?}.", temperature);
-        Err(RapLibErrors::BaseError(msg))
+        Err(RapLibErrors::StreamerError(msg))
     } else {
         Ok(temperature)
     }
@@ -128,7 +128,7 @@ pub fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors>
     if value > 0 {
         Ok(device.write(cmd, value)?)
     } else {
-        Err(RapLibErrors::BaseError(format!(
+        Err(RapLibErrors::StreamerError(format!(
             "HV Value too small: {:?}",
             value
         )))

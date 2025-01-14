@@ -34,7 +34,7 @@ pub fn perform_accelerator_initialization(device: &FtdiBoard) -> Result<(), RapL
             "SHA256 initialization and self test failed. Fifo_status = {:}; SHA256_selftest = {:}",
             fifo_status, sha256_selftest
         );
-        Err(RapLibErrors::Sha256Error(msg))
+        Err(RapLibErrors::StreamerError(msg))
     }
 }
 

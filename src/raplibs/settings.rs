@@ -177,10 +177,10 @@ impl RunSettings {
             if let Ok(run_settings) = read_file.read_binary::<RunSettings>() {
                 Ok(run_settings)
             } else {
-                Err(RapLibErrors::RunSettingsError("Cannot read run_settings.bin".to_string()))
+                Err(RapLibErrors::SettingsError("Cannot read run_settings.bin".to_string()))
             }
         } else {
-            Err(RapLibErrors::RunSettingsError("Cannot read run_settings.bin".to_string()))
+            Err(RapLibErrors::SettingsError("Cannot read run_settings.bin".to_string()))
         }
     }
 
@@ -262,7 +262,7 @@ impl RunSettings {
         }
 
         if err {
-            return Err(RapLibErrors::RunSettingsError(msg.to_string()));
+            return Err(RapLibErrors::SettingsError(msg.to_string()));
         }
 
         Ok(())

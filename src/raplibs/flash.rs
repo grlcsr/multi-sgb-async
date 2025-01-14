@@ -96,10 +96,10 @@ impl FlashData {
             if status == FLASH_SUCCESS {
                 Ok(())
             } else {
-                Err(RapLibErrors::FlashError("FLASH communication: status mismatch.".to_string()))
+                Err(RapLibErrors::StreamerError("FLASH communication: status mismatch.".to_string()))
             }
         } else {
-            Err(RapLibErrors::FlashError("FLASH communication failed: cmd mismatch.".to_string()))
+            Err(RapLibErrors::StreamerError("FLASH communication failed: cmd mismatch.".to_string()))
         }
     }
 
@@ -113,7 +113,7 @@ impl FlashData {
                 let _ = device.read(&mut flash_data);
                 Ok(flash_data)
             }
-            Err(x) => Err(RapLibErrors::FlashError(x.to_string())),
+            Err(x) => Err(RapLibErrors::StreamerError(x.to_string())),
         }
     }
 }
