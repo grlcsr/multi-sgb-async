@@ -53,7 +53,7 @@ impl SingleGeneratorBoardFSM {
         let mut err: Result<_, RapLibErrors> = Ok(());
 
         loop {
-            if let Err(_) = err {
+            if err.is_err() {
                 self.state = StreamerState::ErrorHandler;
             }
 
@@ -74,27 +74,19 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::PrepareInitialization => {
                     println!("Preparing Board for initialization.");
-                    if let Err(_) = self.stop_device().await {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
+                    err = self.stop_device().await;
+                    if !err.is_err() {
+                        err = self.flush_device().await;
                     }
-                    if let Err(_) = self.flush_device().await {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
-                    }
-
+                    
                     self.state = StreamerState::Initalize;
                 }
 
                 StreamerState::Initalize => {
                     println!("Initializing Board.");
-                    if let Err(_) = self.initialize_board().await {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
-                    }
-                    if let Err(_) = self.reset_nibbles().await {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
+                    err = self.initialize_board().await;
+                    if !err.is_err() {
+                        err = self.reset_nibbles().await;
                     }
 
                     self.state = StreamerState::WriteSettings;
@@ -102,13 +94,9 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::WriteSettings => {
                     println!("Writing settings to device.");
-                    if let Err(_) = self.write_run_settings_to_device() {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
-                    }
-                    if let Err(_) = self.prepare_fifos().await {
-                        self.state = StreamerState::ErrorHandler;
-                        continue;
+                    err = self.write_run_settings_to_device();
+                    if !err.is_err() {
+                        err = self.prepare_fifos().await;
                     }
 
                     self.state = StreamerState::TempStabilization;
@@ -154,8 +142,10 @@ impl SingleGeneratorBoardFSM {
                     if let Ok(new_settings) = RunSettings::get_run_settings() {
                         if self.run_settings_local != new_settings {
                             self.run_settings_local = new_settings;
-                            self.write_run_settings_to_device();
-                            self.prepare_fifos().await;
+                            err = self.write_run_settings_to_device();
+                            if !err.is_err() {
+                                err = self.prepare_fifos().await;
+                            }
                         }
                     }
                     self.state = StreamerState::ReadStream;
@@ -163,9 +153,9 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::Termination => {
                     println!("Terminating device.");
-                    base::stop(&self.board);
-                    self.flush_device().await;
-                    base::close(&self.board);
+                    let _ = base::stop(&self.board);
+                    let _ = self.flush_device().await;
+                    let _ = base::close(&self.board);
                     break;
                 }
 
@@ -187,8 +177,8 @@ impl SingleGeneratorBoardFSM {
         let device = &mut self.board;
         base::check_board_communication(device)?;
 
-        let hv_val = self.flash_default.get_hv();
-        let dac = self.flash_default.get_dac();
+        let hv_val = self.flash_default.hv();
+        let dac = self.flash_default.dac();
         base::initialize_sipm_parameters(device, hv_val, dac)?;
 
         let afp_threshold: u16 = self.run_settings_local.get_afp_threshold();
@@ -326,13 +316,13 @@ impl SingleGeneratorBoardFSM {
         let temperature_now = base::req_temperature(&self.board)?;
         let hv_now = base::hv_compensate(
             temperature_now,
-            flash_default.get_hv(),
-            flash_default.get_ref_temp(),
+            flash_default.hv(),
+            flash_default.ref_temp(),
         );
         self.flash_calib.set_hv(hv_now);
         base::set_hvdac(&self.board, hv_now)?;
 
-        let delta_t = (self.flash_calib.get_ref_temp() - temperature_now).abs();
+        let delta_t = (self.flash_calib.ref_temp() - temperature_now).abs();
         if delta_t > 2.0 {
             self.flash_calib.set_ref_temp(temperature_now);
             return Ok(true);

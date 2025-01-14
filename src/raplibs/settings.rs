@@ -5,6 +5,8 @@ use std::sync::Mutex;
 
 use super::RapLibErrors;
 
+pub(crate) const MAXIMUM_NUM_OF_DWORDS: usize = 0xffff;
+
 #[derive(Debug, Copy, Clone)]
 pub struct RunSettings {
     num_of_dwords: u16, // package size in dwords - number of 32 bit words, hardware limit is 0xffff, has to be a multiple of 0xff
@@ -35,6 +37,7 @@ pub struct RunSettings {
 
 lazy_static! {
     static ref RUN_SETTINGS: Mutex<RunSettings> = Mutex::new(RunSettings::default());
+    static ref HW_LIMITS: Mutex<HwLimits> = Mutex::new(HwLimits::new());
 }
 
 impl RunSettings {
@@ -154,7 +157,7 @@ impl RunSettings {
         match self.check_run_settings_validity() {
             Ok(_) => {
                 RUN_SETTINGS.lock().unwrap().clone_from(&self);
-                RunSettings::write_settings_to_file();
+                RunSettings::write_settings_to_file()?;
             }
             Err(f) => println!("{}", f),
         }
@@ -167,7 +170,7 @@ impl RunSettings {
 
     pub fn reset_default_settings() -> Result<(), RapLibErrors> {
         RunSettings::default().set_run_settings()?;
-        RunSettings::write_settings_to_file();
+        RunSettings::write_settings_to_file()?;
         Ok(())
     }
 
@@ -177,14 +180,18 @@ impl RunSettings {
             if let Ok(run_settings) = read_file.read_binary::<RunSettings>() {
                 Ok(run_settings)
             } else {
-                Err(RapLibErrors::SettingsError("Cannot read run_settings.bin".to_string()))
+                Err(RapLibErrors::SettingsError(
+                    "Cannot read run_settings.bin".to_string(),
+                ))
             }
         } else {
-            Err(RapLibErrors::SettingsError("Cannot read run_settings.bin".to_string()))
+            Err(RapLibErrors::SettingsError(
+                "Cannot read run_settings.bin".to_string(),
+            ))
         }
     }
 
-    fn write_settings_to_file() {
+    fn write_settings_to_file() -> Result<(), RapLibErrors> {
         let run_settings: RunSettings = *RUN_SETTINGS.lock().unwrap();
         let run_settings_path: &str = "./run_settings.bin";
         let mut write_file = OpenOptions::new()
@@ -192,11 +199,12 @@ impl RunSettings {
             .write(true)
             .truncate(true)
             .open(run_settings_path)
-            .expect("Failed to open run_settings.bin");
+            .map_err(|err| RapLibErrors::SettingsError(format!("Failed to open run_settings.bin. Error code: {:?}", err)))?;
 
         write_file
             .write_binary(&run_settings)
-            .expect("Cannot write run_settings to file.");
+            .map_err(|err| RapLibErrors::SettingsError(format!("Cannot write run_settings to file. Error code: {:?}", err)))?;
+        Ok(())
     }
 
     fn check_run_settings_validity(self) -> Result<(), RapLibErrors> {
@@ -294,17 +302,52 @@ impl Default for RunSettings {
 
 impl PartialEq for RunSettings {
     fn eq(&self, other: &Self) -> bool {
-        self.num_of_dwords == other.num_of_dwords &&
-        self.afp_threshold == other.afp_threshold &&
-        self.sanity_fail_flag_latch_event_alarm_thr == other.sanity_fail_flag_latch_event_alarm_thr &&
-        self.mono_num_of_sequences_power_of_2 == other.mono_num_of_sequences_power_of_2 &&
-        self.mono_sequence_length_power_of_2 == other.mono_sequence_length_power_of_2 &&
-        self.mono_confidence_level_upper == other.mono_confidence_level_upper &&
-        self.mono_confidence_level_lower == other.mono_confidence_level_lower &&
-        self.asym_sequence_length_bits == other.asym_sequence_length_bits &&
-        self.runs_sequence_length == other.runs_sequence_length &&
-        self.runs_num_of_sequences_power_of_2 == other.runs_num_of_sequences_power_of_2 &&
-        self.runs_confidence_level == other.runs_confidence_level &&
-        self.sha256_reduction_ratio == other.sha256_reduction_ratio
+        self.num_of_dwords == other.num_of_dwords
+            && self.afp_threshold == other.afp_threshold
+            && self.sanity_fail_flag_latch_event_alarm_thr
+                == other.sanity_fail_flag_latch_event_alarm_thr
+            && self.mono_num_of_sequences_power_of_2 == other.mono_num_of_sequences_power_of_2
+            && self.mono_sequence_length_power_of_2 == other.mono_sequence_length_power_of_2
+            && self.mono_confidence_level_upper == other.mono_confidence_level_upper
+            && self.mono_confidence_level_lower == other.mono_confidence_level_lower
+            && self.asym_sequence_length_bits == other.asym_sequence_length_bits
+            && self.runs_sequence_length == other.runs_sequence_length
+            && self.runs_num_of_sequences_power_of_2 == other.runs_num_of_sequences_power_of_2
+            && self.runs_confidence_level == other.runs_confidence_level
+            && self.sha256_reduction_ratio == other.sha256_reduction_ratio
+    }
+}
+
+pub struct HwLimits {
+    sha256_fifo: i32, // minus 2 full entries for safety
+    mono_fifo: i32,   // minus 4 full entries for safety
+    runs_fifo: i32,   // minus 4 full entries for safety
+    asym_fifo: i32,   // minus 4 full entries for safety
+}
+
+impl HwLimits {
+    pub const fn new() -> Self {
+        Self {
+            sha256_fifo: 512 - 8 * 2,
+            mono_fifo: 1024 - 4,
+            runs_fifo: 1024 - 4,
+            asym_fifo: 1024 - 4,
+        }
+    }
+
+    pub fn sha256(&self) -> i32 {
+        self.sha256_fifo
+    }
+
+    pub fn mono(&self) -> i32 {
+        self.mono_fifo
+    }
+
+    pub fn runs(&self) -> i32 {
+        self.runs_fifo
+    }
+
+    pub fn asym(&self) -> i32 {
+        self.asym_fifo
     }
 }

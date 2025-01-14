@@ -1,13 +1,14 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+    time::{Duration, Instant},
+};
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, StreamExt};
 
-use crate::raplibs::RapLibErrors;
-
 use super::{base, global_data::*, sanity_checks, sha256, FlashData, FtdiBoard};
+use crate::raplibs::{settings::MAXIMUM_NUM_OF_DWORDS, RapLibErrors};
 
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
@@ -66,10 +67,18 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                             num_seeds -= 1;
                             println!("Missing seeds: {}", num_seeds);
                         }
-                        Err(_) => return Err(RapLibErrors::UnhandledError("generate_packet: unhandled error while generating.".to_string())),
+                        Err(_) => {
+                            return Err(RapLibErrors::UnhandledError(
+                                "generate_packet: unhandled error while generating.".to_string(),
+                            ))
+                        }
                     }
                 }
-                None => return Err(RapLibErrors::StreamerError("Generation timed out.".to_string())),
+                None => {
+                    return Err(RapLibErrors::StreamerError(
+                        "Generation timed out.".to_string(),
+                    ))
+                }
             }
         }
     }
@@ -358,12 +367,12 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
 
     pub async fn perform_temperature_stabilization(&mut self) -> Result<(), RapLibErrors> {
         let mut temperature_now: f32 = base::req_temperature(self.board)?;
-        let mut delta_t = f32::abs(self.flash_data.get_ref_temp() - temperature_now);
+        let mut delta_t = f32::abs(self.flash_data.ref_temp() - temperature_now);
 
         println!(
             "Initial values: temperature_now = {}; ref_temperature = {}; delta_t = {}",
             temperature_now,
-            self.flash_data.get_ref_temp(),
+            self.flash_data.ref_temp(),
             delta_t
         );
 

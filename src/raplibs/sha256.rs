@@ -1,10 +1,12 @@
-use super::ftdi_wrapper::FtdiBoard;
-use super::settings::RunSettings;
-use super::RapLibErrors;
+#![allow(dead_code)]
+use super::{
+    RapLibErrors,
+    settings::RunSettings,
+    ftdi_wrapper::FtdiBoard,
+};
 
 #[derive(Debug)]
 #[repr(u32)]
-#[allow(dead_code)]
 enum ShaAcceleratorStatus {
     Ok = 0,
     ErrorFifo = 1,

@@ -7,17 +7,11 @@ const FLASH_SUCCESS: u32 = 0x00004F4B;
 const FLASH_FAILURE: u32 = 0x00455252;
 const FLASH_PAGESIZE: usize = 256;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct FlashData {
     hv_val: f32,
     dac: u32,
     ref_temp: f32,
-}
-
-impl Default for FlashData {
-    fn default() -> Self {
-        Self::new(0.0, 0, 0.0)
-    }
 }
 
 impl FlashData {
@@ -29,7 +23,7 @@ impl FlashData {
         }
     }
 
-    pub fn get_hv(&self) -> f32 {
+    pub fn hv(&self) -> f32 {
         self.hv_val
     }
 
@@ -37,7 +31,7 @@ impl FlashData {
         self.hv_val = val;
     }
 
-    pub fn get_dac(&self) -> u32 {
+    pub fn dac(&self) -> u32 {
         self.dac
     }
 
@@ -45,7 +39,7 @@ impl FlashData {
         self.dac = val;
     }
 
-    pub fn get_ref_temp(&self) -> f32 {
+    pub fn ref_temp(&self) -> f32 {
         self.ref_temp
     }
 

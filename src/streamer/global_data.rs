@@ -2,7 +2,6 @@
 pub(crate) const SEED_LENGTH: usize = 2048 / 8;
 pub(crate) const BUFFER_SIZE: usize = SEED_LENGTH;
 pub(crate) const BUFFER_SIZE_FLUSHING: usize = 100000;
-pub(crate) const MAXIMUM_NUM_OF_DWORDS: usize = 0xffff;
 
 // From v_counter after reset if there is no hardware error (found experimentally, no idea why)
 pub(crate) const FRESH_NIBBLES_AFTER_RESET: i32 = 8188;
@@ -74,3 +73,4 @@ impl RawStream {
         self.apt_fail
     }
 }
+
