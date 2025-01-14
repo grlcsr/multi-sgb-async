@@ -125,7 +125,6 @@ impl SingleGeneratorBoardFSM {
 
                 StreamerState::TempCompensation => {
                     println!("Performing Temperature Compensation.");
-
                     match self.temperature_compensation() {
                         Ok(true) => err = self.prepare_fifos().await,
                         Err(_) => {
@@ -148,6 +147,7 @@ impl SingleGeneratorBoardFSM {
                             }
                         }
                     }
+                    
                     self.state = StreamerState::ReadStream;
                 }
 
