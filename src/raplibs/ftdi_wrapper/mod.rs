@@ -122,25 +122,3 @@ impl std::fmt::Display for FtdiBoardStatus {
         write!(f, "Error code: {}", self.err)
     }
 }
-
-#[test]
-fn test_disconnection_board() {
-    let serial_number = "RNG46856";
-    let device = FtdiBoard::open_with_serial(serial_number);
-    match device {
-        Ok(dev) => {
-            let mut buf: [u8; 100] = [0; 100];
-            loop {
-                let x = dev.read(&mut buf);
-                match x {
-                    Ok(_) => continue,
-                    Err(f) => {
-                        println!("{}", f);
-                        break;
-                    }
-                }
-            }
-        }
-        Err(f) => println!("{}", f),
-    }
-}

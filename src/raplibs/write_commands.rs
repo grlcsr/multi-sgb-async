@@ -30,4 +30,13 @@ pub enum WriteCommands {
     ReqReadRunsZValFlag = 0xFA,
     SetConfidenceLevelRuns = 0xFB,
     SetNumOfSequencesPowerOf2Runs = 0xFC,
+
+    ReqWritePackFirst = 0xFE,
+    ReqWritePackSecond = 0xFF,
+}
+
+impl From<WriteCommands> for u8 {
+    fn from(wc: WriteCommands) -> u8 {
+        wc as u8
+    }
 }

@@ -199,6 +199,7 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn terminate(&mut self) {
+        todo!();
         println!("Terminating device.");
         let _ = base::stop(&self.board);
         let _ = self.flush_device().await;

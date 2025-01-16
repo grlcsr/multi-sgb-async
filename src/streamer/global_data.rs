@@ -17,7 +17,7 @@ pub enum DataType {
     Asym(Vec<i32>),
     Monobit(Vec<(f32, u32, u32)>),
     Runs(Vec<(f64, u32, u32)>),
-    Sha256(Vec<u8>)
+    Sha256(Vec<u8>),
 }
 
 macro_rules! impl_from_for_data_type {
@@ -49,7 +49,7 @@ pub struct StreamData {
 pub struct RawStream {
     buf: [u8; BUFFER_SIZE],
     rct_fail: bool,
-    apt_fail: bool
+    apt_fail: bool,
 }
 
 impl RawStream {
@@ -57,7 +57,7 @@ impl RawStream {
         Self {
             buf,
             rct_fail: rct,
-            apt_fail: apt
+            apt_fail: apt,
         }
     }
 
@@ -73,4 +73,3 @@ impl RawStream {
         self.apt_fail
     }
 }
-

@@ -13,7 +13,7 @@ use crate::{
 pub struct FifoReader<'a, 'b> {
     serial_number: &'static str,
     board: &'a FtdiBoard,
-    channel: &'b mpsc::Sender<StreamData>
+    channel: &'b mpsc::Sender<StreamData>,
 }
 
 impl<'a, 'b> FifoReader<'a, 'b> {
@@ -25,7 +25,7 @@ impl<'a, 'b> FifoReader<'a, 'b> {
         Self {
             serial_number,
             board,
-            channel
+            channel,
         }
     }
 
@@ -56,10 +56,10 @@ impl<'a, 'b> FifoReader<'a, 'b> {
     where
         F: Fn() -> T + Send,
     {
-        /* 
+        /*
             This timeout will actually never happen because from the perspective of time::timeout
             the future and the timeout end at the same time (since the future doesn't poll and yield)
-            even if the timeout is exceeded on the blocking part. In that case, it prefers 
+            even if the timeout is exceeded on the blocking part. In that case, it prefers
             to return the output instead of an error.
         */
         let timeout = Duration::from_millis(500);

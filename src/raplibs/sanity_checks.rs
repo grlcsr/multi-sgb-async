@@ -1,7 +1,7 @@
-use super::settings::RunSettings;
-use super::RapLibErrors;
 use super::ftdi_wrapper::FtdiBoard;
+use super::settings::RunSettings;
 use super::write_commands::WriteCommands;
+use super::RapLibErrors;
 
 use lazy_static::lazy_static;
 
@@ -10,72 +10,87 @@ lazy_static! {
     pub static ref SF_FXP: f32 = 2.0_f32.powf(-10.0); // Should be -FRACTIONAL_PART_SIZE but not implemented in rust
 }
 
-pub fn update_fpga_settings(device: &FtdiBoard, run_settings: RunSettings) -> Result<(), RapLibErrors> {
+pub fn update_fpga_settings(
+    device: &FtdiBoard,
+    run_settings: RunSettings,
+) -> Result<(), RapLibErrors> {
     set_operation_mode(device, 0)?;
     set_report_mode(device, 1)?;
     set_sequence_length_power_of_2(device, run_settings.get_mono_sequence_length_power_of_2())?;
     set_num_of_sequences_power_of_2(device, run_settings.get_mono_num_of_sequences_power_of_2())?;
     set_confidence_level_upper(device, run_settings.get_mono_confidence_level_upper())?;
     set_confidence_level_lower(device, run_settings.get_mono_confidence_level_lower())?;
-    set_fail_flag_latch_event_alarm_thr(device, run_settings.get_sanity_fail_flag_latch_event_alarm_thr())?;
+    set_fail_flag_latch_event_alarm_thr(
+        device,
+        run_settings.get_sanity_fail_flag_latch_event_alarm_thr(),
+    )?;
     set_sequence_length_runs(device, run_settings.get_runs_sequence_length())?;
-    set_num_of_sequences_power_of_2_runs(device, run_settings.get_runs_num_of_sequences_power_of_2())?;
+    set_num_of_sequences_power_of_2_runs(
+        device,
+        run_settings.get_runs_num_of_sequences_power_of_2(),
+    )?;
     set_confidence_level_runs(device, run_settings.get_runs_confidence_level())?;
     set_asym_nos(device, run_settings.get_asym_sequence_length_bits() / 4)?;
-    
+
     Ok(())
 }
 
 fn set_operation_mode(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetOperationMode as u8;
+    let cmd: u8 = WriteCommands::SetOperationMode.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_report_mode(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetReportMode as u8;
+    let cmd: u8 = WriteCommands::SetReportMode.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_sequence_length_power_of_2(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetSequenceLengthPowerOf2 as u8;
+    let cmd: u8 = WriteCommands::SetSequenceLengthPowerOf2.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_num_of_sequences_power_of_2(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2 as u8;
+    let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_confidence_level_upper(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetConfidenceLevelUpper as u8;
+    let cmd: u8 = WriteCommands::SetConfidenceLevelUpper.into();
     let value_adjusted: u16 = (value as f32 / *SF_FXP) as u16;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
 fn set_confidence_level_lower(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetConfidenceLevelLower as u8;
+    let cmd: u8 = WriteCommands::SetConfidenceLevelLower.into();
     let value_adjusted: u16 = (value as f32 / *SF_FXP) as u16;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
-fn set_fail_flag_latch_event_alarm_thr(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetFailFlagLatchEventAlarmThr as u8;
+fn set_fail_flag_latch_event_alarm_thr(
+    device: &FtdiBoard,
+    value: u16,
+) -> Result<usize, RapLibErrors> {
+    let cmd: u8 = WriteCommands::SetFailFlagLatchEventAlarmThr.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_sequence_length_runs(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetSequenceLengthRuns as u8;
+    let cmd: u8 = WriteCommands::SetSequenceLengthRuns.into();
     let value_adjusted: u16 = value - 5;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
-fn set_num_of_sequences_power_of_2_runs(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2Runs as u8;
+fn set_num_of_sequences_power_of_2_runs(
+    device: &FtdiBoard,
+    value: u16,
+) -> Result<usize, RapLibErrors> {
+    let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2Runs.into();
     Ok(device.write(cmd, value)?)
 }
 
 fn set_confidence_level_runs(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::SetConfidenceLevelRuns as u8;
+    let cmd: u8 = WriteCommands::SetConfidenceLevelRuns.into();
     Ok(device.write(cmd, value)?)
 }
 
@@ -91,20 +106,20 @@ pub fn req_read_asym_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
 }
 
 pub fn req_read_monobit_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::ReqReadMonoFifo as u8;
+    let cmd: u8 = WriteCommands::ReqReadMonoFifo.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
 pub fn req_read_runs_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::ReqReadRunsZValFlag as u8;
+    let cmd: u8 = WriteCommands::ReqReadRunsZValFlag.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
 #[allow(dead_code)]
 pub fn req_read_runs_stats(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
-    let cmd: u8 = WriteCommands::ReqReadRunsFlagLatches as u8;
+    let cmd: u8 = WriteCommands::ReqReadRunsFlagLatches.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
@@ -142,6 +157,7 @@ pub fn fixed_to_float(fixed_input_num: u64, total_bits: i32, fractional_bits: i3
     let fractional_part: f64 = (fixed_num as u64 & ((tmp_u64 << fractional_bits) - 1)) as f64;
 
     // Convert the integer and fractional parts to floating-point
-    let floating_point_num: f64 = integer_part + fractional_part / ((tmp_u64 << fractional_bits) as f64);
+    let floating_point_num: f64 =
+        integer_part + fractional_part / ((tmp_u64 << fractional_bits) as f64);
     floating_point_num
 }

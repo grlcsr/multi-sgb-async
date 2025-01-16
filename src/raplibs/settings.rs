@@ -338,7 +338,7 @@ impl RunSettings {
         if err {
             return Err(RapLibErrors::SettingsError(msg.to_string()));
         }
-        
+
         if self.num_of_dwords % 0x100 != 0 {
             println!("- num_of_dwords must be a multiple of 0x100. Computing value.");
             let optimal_dwords = self.calculate_optimal_num_of_dwords()?;
@@ -356,7 +356,7 @@ impl RunSettings {
         let limits = HwLimits::get_hw_limits()?;
         let mut step = 0x100;
         let mut current_dw = 0x0000;
-        
+
         enum State {
             SearchCoarse,
             BackSearch,

@@ -1,9 +1,5 @@
 #![allow(dead_code)]
-use super::{
-    RapLibErrors,
-    settings::RunSettings,
-    ftdi_wrapper::FtdiBoard,
-};
+use super::{ftdi_wrapper::FtdiBoard, settings::RunSettings, RapLibErrors};
 
 #[derive(Debug)]
 #[repr(u32)]
