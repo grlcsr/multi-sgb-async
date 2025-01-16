@@ -1,18 +1,19 @@
 pub(crate) mod global_data;
 pub(crate) mod stream_readers;
 
-use tokio::sync::mpsc;
 use std::time::Duration;
+use tokio::{select, sync::mpsc};
+use tokio_util::sync::CancellationToken;
 
-use stream_readers::{
-    device_flusher::FlushDevice, fifo_reader::FifoReader, packet_generator::PacketGenerator,
-    temperature_stabilizer::TemperatureStabilizer,
-};
 use crate::raplibs::{
     base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256,
     RapLibErrors,
 };
 use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
+use stream_readers::{
+    device_flusher::FlushDevice, fifo_reader::FifoReader, packet_generator::PacketGenerator,
+    temperature_stabilizer::TemperatureStabilizer,
+};
 
 #[derive(PartialEq)]
 enum StreamerState {
@@ -28,6 +29,7 @@ enum StreamerState {
     CheckSettings,
     Termination,
     ErrorHandler,
+    TerminationWithError,
 }
 
 pub struct SingleGeneratorBoardFSM {
@@ -38,6 +40,7 @@ pub struct SingleGeneratorBoardFSM {
     flash_default: FlashData,
     flash_calib: FlashData,
     run_settings_local: RunSettings,
+    cancellation_token: CancellationToken,
 
     v_counter_last: i32,
 
@@ -45,23 +48,36 @@ pub struct SingleGeneratorBoardFSM {
 }
 
 impl SingleGeneratorBoardFSM {
-    pub fn new(serial: &'static str, tx_channel: Option<mpsc::Sender<StreamData>>) -> Self {
+    pub fn new(
+        serial: &'static str,
+        tx_channel: Option<mpsc::Sender<StreamData>>,
+        cancellation_token: CancellationToken,
+    ) -> Self {
         Self {
             serial_number: serial,
             tx_channel,
+            cancellation_token,
             ..Default::default()
         }
     }
 
     pub async fn run(&mut self) {
+        let token = self.cancellation_token.clone();
         loop {
-            if let Err(e) = self.handle_current_state().await {
-                eprintln!("Error encountered: {:?}", e);
-                self.state = StreamerState::ErrorHandler;
+            select! {
+                _ = token.cancelled() => self.state = StreamerState::Termination,
+                e = self.handle_current_state() => {
+                    if e.is_err() {
+                        eprintln!("Error encountered: {:?}", e);
+                        self.state = StreamerState::ErrorHandler;
+                    }
+                }
             }
 
             if self.state == StreamerState::Termination {
-                self.terminate().await;
+                self.handle_termination().await.expect("Error during termination of device.");
+                break;
+            } else if self.state == StreamerState::TerminationWithError {
                 break;
             }
         }
@@ -80,7 +96,9 @@ impl SingleGeneratorBoardFSM {
             StreamerState::TempCompensation => self.handle_temp_compensation().await,
             StreamerState::CheckSettings => self.handle_check_settings().await,
             StreamerState::Termination => Ok(()),
+
             StreamerState::ErrorHandler => self.handle_error().await,
+            StreamerState::TerminationWithError => Ok(()),
         }
     }
 
@@ -193,17 +211,25 @@ impl SingleGeneratorBoardFSM {
 
     async fn handle_error(&mut self) -> Result<(), RapLibErrors> {
         eprintln!("Handling error state.");
-        self.flush_device().await?;
 
+        if let Err(e) = self.handle_termination().await {
+            self.state = StreamerState::TerminationWithError;
+            eprintln!("Unable to handle error. Terminating device.\nError code: {:?}", e);
+            return Ok(());
+        }
+
+        if let Err(e) = self.handle_open_connection().await {
+            self.state = StreamerState::TerminationWithError;
+            eprintln!("Unable to handle error. Terminating device.\nError code: {:?}", e);
+        }
         Ok(())
     }
 
-    async fn terminate(&mut self) {
-        todo!();
+    async fn handle_termination(&mut self) -> Result<(), RapLibErrors> {
         println!("Terminating device.");
-        let _ = base::stop(&self.board);
-        let _ = self.flush_device().await;
-        let _ = base::close(&self.board);
+        base::stop(&self.board)?;
+        self.flush_device().await?;
+        Ok(base::close(&self.board)?)
     }
 
     async fn flush_device(&mut self) -> Result<(), RapLibErrors> {
@@ -345,6 +371,7 @@ impl Default for SingleGeneratorBoardFSM {
             run_settings_local: RunSettings::default(),
             v_counter_last: 0,
             tx_channel: None,
+            cancellation_token: CancellationToken::default(),
         }
     }
 }

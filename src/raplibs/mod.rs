@@ -29,7 +29,7 @@ impl fmt::Debug for RapLibErrors {
             RapLibErrors::FtdiStatus(x) => format!("FTDI Error: {}", x).fmt(f),
             RapLibErrors::StreamerError(x) => format!("Streamer Error: {}", x).fmt(f),
             RapLibErrors::SettingsError(x) => format!("Settings Error: {}", x).fmt(f),
-            RapLibErrors::UnhandledError(..) => "Unhandled External Error. Please restart.".fmt(f),
+            RapLibErrors::UnhandledError(x) => format!("Unhandled External Error: {}\nPlease restart.", x).fmt(f),
         }
     }
 }
@@ -43,8 +43,8 @@ impl fmt::Display for RapLibErrors {
                 RapLibErrors::FtdiStatus(x) => format!("FTDI Error: {}", x),
                 RapLibErrors::StreamerError(x) => format!("Streamer Error: {}", x),
                 RapLibErrors::SettingsError(x) => format!("Settings Error: {}", x),
-                RapLibErrors::UnhandledError(..) =>
-                    format!("Unhandled External Error. Please restart."),
+                RapLibErrors::UnhandledError(x) =>
+                    format!("Unhandled External Error: {}\nPlease restart.", x),
             }
         )
     }
