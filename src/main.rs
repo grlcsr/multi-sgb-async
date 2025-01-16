@@ -29,14 +29,15 @@ fn main() {
 }
 
 async fn async_main() {
-    let serial = "RNG46856";
+    //let serial = "RNG46856";
+    let serial = "RNG0013";
 
     let (tx, mut rx) = mpsc::channel::<StreamData>(1000);
 
     let mut serial_stream = SingleGeneratorBoardFSM::new(serial, Some(tx.clone()));
 
     tokio::spawn(async move {
-        serial_stream.sgb_mananger().await;
+        serial_stream.run().await;
     });
 
     while let Some(message) = rx.recv().await {
