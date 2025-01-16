@@ -29,7 +29,6 @@ enum StreamerState {
     CheckSettings,
     Termination,
     ErrorHandler,
-    TerminationWithError,
 }
 
 pub struct SingleGeneratorBoardFSM {
@@ -75,9 +74,9 @@ impl SingleGeneratorBoardFSM {
             }
 
             if self.state == StreamerState::Termination {
-                self.handle_termination().await.expect("Error during termination of device.");
-                break;
-            } else if self.state == StreamerState::TerminationWithError {
+                if let Err(x) = self.handle_termination().await {
+                    format!("Error during termination of device. Error code: {}", x);
+                }
                 break;
             }
         }
@@ -96,9 +95,7 @@ impl SingleGeneratorBoardFSM {
             StreamerState::TempCompensation => self.handle_temp_compensation().await,
             StreamerState::CheckSettings => self.handle_check_settings().await,
             StreamerState::Termination => Ok(()),
-
             StreamerState::ErrorHandler => self.handle_error().await,
-            StreamerState::TerminationWithError => Ok(()),
         }
     }
 
@@ -213,13 +210,13 @@ impl SingleGeneratorBoardFSM {
         eprintln!("Handling error state.");
 
         if let Err(e) = self.handle_termination().await {
-            self.state = StreamerState::TerminationWithError;
+            self.state = StreamerState::Termination;
             eprintln!("Unable to handle error. Terminating device.\nError code: {:?}", e);
             return Ok(());
         }
 
         if let Err(e) = self.handle_open_connection().await {
-            self.state = StreamerState::TerminationWithError;
+            self.state = StreamerState::Termination;
             eprintln!("Unable to handle error. Terminating device.\nError code: {:?}", e);
         }
         Ok(())
