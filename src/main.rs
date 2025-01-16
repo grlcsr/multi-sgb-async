@@ -1,9 +1,13 @@
 pub mod raplibs;
 pub mod streamer;
 
+use std::collections::HashMap;
+
+use raplibs::ftdi_wrapper::list_devices;
 use tokio::runtime::Runtime;
-use tokio::{select, signal};
 use tokio::sync::mpsc;
+use tokio::{select, signal};
+use tokio::task::JoinHandle;
 
 use raplibs::settings::RunSettings;
 use streamer::global_data::{DataType, StreamData};
@@ -11,7 +15,6 @@ use streamer::SingleGeneratorBoardFSM;
 use tokio_util::sync::CancellationToken;
 
 fn main() {
-    use libftd2xx::list_devices;
     println!("{:?}", list_devices());
 
     let x = RunSettings::initialize_run_settings();
@@ -31,14 +34,29 @@ async fn async_main() {
     //let serial = "RNG46856";
     let serial = "RNG0013";
 
+    let mut device_list: HashMap<String, JoinHandle<()>> = HashMap::new();
     let (tx, mut rx) = mpsc::channel::<StreamData>(1000);
     let token = CancellationToken::new();
 
-    let mut serial_stream = SingleGeneratorBoardFSM::new(serial, Some(tx.clone()), token.clone());
+    
 
-    tokio::spawn(async move {
-        serial_stream.run().await;
-    });
+    loop {
+        if let Ok(serial_list) = list_devices() {
+            for serial_number in serial_list {
+                if device_list.contains_key(&serial_number) {
+                    if let Some(handle) = device_list.get(&serial_number) {
+                        todo!();
+                    }
+                } else {
+                    let mut serial_stream = SingleGeneratorBoardFSM::new(serial, Some(tx.clone()), token.clone());
+                    let handle = tokio::spawn(async move {
+                        serial_stream.run().await;
+                    });
+                    device_list.insert(serial_number, handle);
+                }
+            }
+        }
+    }
 
     loop {
         select! {

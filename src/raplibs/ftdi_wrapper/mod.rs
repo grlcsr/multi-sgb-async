@@ -1,9 +1,21 @@
 use core::time::Duration;
-use libftd2xx::{BitMode, DeviceStatus, FtStatus, Ftdi, FtdiCommon};
+use libftd2xx::{
+    list_devices as ftdi_ld, BitMode, DeviceInfo, DeviceStatus, FtStatus, Ftdi, FtdiCommon,
+};
 use std::{
     fmt,
     sync::{Arc, Mutex, MutexGuard},
 };
+
+/*
+    Returns the list of devices currently connected to the computer
+*/
+pub fn list_devices() -> Result<Vec<String>, FtdiBoardStatus> {
+    Ok((ftdi_ld()?)
+        .iter()
+        .map(|device_info: &DeviceInfo| device_info.serial_number.clone())
+        .collect())
+}
 
 #[derive(Debug)]
 pub struct FtdiBoard {
