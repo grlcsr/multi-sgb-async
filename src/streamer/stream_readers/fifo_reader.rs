@@ -11,14 +11,14 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct FifoReader<'a, 'b> {
-    serial_number: &'static str,
+    serial_number: String,
     board: &'a FtdiBoard,
     channel: &'b mpsc::Sender<StreamData>,
 }
 
 impl<'a, 'b> FifoReader<'a, 'b> {
     pub fn new(
-        serial_number: &'static str,
+        serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
     ) -> Self {

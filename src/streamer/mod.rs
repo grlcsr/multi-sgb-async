@@ -33,22 +33,21 @@ enum StreamerState {
 
 pub struct SingleGeneratorBoardFSM {
     state: StreamerState,
-    serial_number: &'static str,
+    serial_number: String,
     board: FtdiBoard,
 
     flash_default: FlashData,
     flash_calib: FlashData,
     run_settings_local: RunSettings,
-    cancellation_token: CancellationToken,
-
     v_counter_last: i32,
 
     tx_channel: Option<mpsc::Sender<StreamData>>,
+    cancellation_token: CancellationToken,
 }
 
 impl SingleGeneratorBoardFSM {
     pub fn new(
-        serial: &'static str,
+        serial: String,
         tx_channel: Option<mpsc::Sender<StreamData>>,
         cancellation_token: CancellationToken,
     ) -> Self {
@@ -75,7 +74,7 @@ impl SingleGeneratorBoardFSM {
 
             if self.state == StreamerState::Termination {
                 if let Err(x) = self.handle_termination().await {
-                    format!("Error during termination of device. Error code: {}", x);
+                    println!("Error during termination of device. Error code: {}", x);
                 }
                 break;
             }
@@ -240,7 +239,7 @@ impl SingleGeneratorBoardFSM {
 
     async fn generate_packet(&mut self) -> Result<(), RapLibErrors> {
         if let Some(tx_channel) = self.tx_channel.clone() {
-            let serial_number = self.serial_number;
+            let serial_number = self.serial_number.clone();
             let max_dwords = self.run_settings_local.get_num_of_dwords();
 
             let mut packet_generator =
@@ -262,7 +261,7 @@ impl SingleGeneratorBoardFSM {
 
     async fn read_fifo_buffers(&mut self) -> Result<(), RapLibErrors> {
         if let Some(tx_channel) = self.tx_channel.clone() {
-            let serial_number = self.serial_number;
+            let serial_number = self.serial_number.clone();
 
             let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
             return Ok(fifo_reader.read_fifo_results().await?);
@@ -361,7 +360,7 @@ impl Default for SingleGeneratorBoardFSM {
     fn default() -> Self {
         Self {
             state: StreamerState::OpenConnection,
-            serial_number: "default",
+            serial_number: "default".to_string(),
             board: FtdiBoard::default(),
             flash_default: FlashData::default(),
             flash_calib: FlashData::default(),

@@ -17,7 +17,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct PacketGenerator<'a, 'b> {
-    serial_number: &'static str,
+    serial_number: String,
     board: &'a FtdiBoard,
     channel: &'b mpsc::Sender<StreamData>,
 
@@ -29,7 +29,7 @@ pub struct PacketGenerator<'a, 'b> {
 
 impl<'a, 'b> PacketGenerator<'a, 'b> {
     pub fn new(
-        serial_number: &'static str,
+        serial_number: String,
         board: &'a FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
         max_dwords: u16,
