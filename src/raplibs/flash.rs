@@ -1,11 +1,7 @@
-use super::ftdi_wrapper::FtdiBoard;
-use super::write_commands::WriteCommands;
-use super::RapLibErrors;
-
-const FLASH_SUCCESS: u32 = 0x00004F4B;
-#[allow(dead_code)]
-const FLASH_FAILURE: u32 = 0x00455252;
-const FLASH_PAGESIZE: usize = 256;
+use super::{
+    ftdi_wrapper::FtdiBoard, write_commands::WriteCommands, RapLibErrors, FLASH_PAGESIZE,
+    FLASH_SUCCESS,
+};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct FlashData {

@@ -1,7 +1,8 @@
-use binext::{BinaryRead, BinaryWrite};
-use lazy_static::lazy_static;
 use std::fs::OpenOptions;
 use std::sync::Mutex;
+
+use binext::{BinaryRead, BinaryWrite};
+use lazy_static::lazy_static;
 
 use super::RapLibErrors;
 

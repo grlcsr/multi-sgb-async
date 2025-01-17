@@ -1,8 +1,7 @@
-use crate::raplibs::SOFTWARE_VERSION;
-
-use super::ftdi_wrapper::FtdiBoard;
-use super::write_commands::WriteCommands;
-use super::{RapLibErrors, CHECK_VALUE, MIN_SUPPORTED_FIRMWARE_VERSION};
+use super::{
+    ftdi_wrapper::FtdiBoard, write_commands::WriteCommands, RapLibErrors, CHECK_VALUE,
+    MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION,
+};
 
 pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors> {
     let cmd: u8 = 7;

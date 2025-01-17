@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub(crate) mod base;
 pub(crate) mod flash;
 pub(crate) mod ftdi_wrapper;
@@ -7,12 +8,15 @@ pub(crate) mod sha256;
 pub(crate) mod write_commands;
 
 use ftdi_wrapper::FtdiBoardStatus;
-use std::error::Error;
-use std::fmt;
+use std::{error::Error, fmt};
 
 pub const SOFTWARE_VERSION: u32 = 23061401;
 pub const MIN_SUPPORTED_FIRMWARE_VERSION: u32 = 23060802;
 pub const CHECK_VALUE: u32 = 0xabcd1234;
+
+const FLASH_SUCCESS: u32 = 0x00004F4B;
+const FLASH_FAILURE: u32 = 0x00455252;
+const FLASH_PAGESIZE: usize = 256;
 
 pub enum RapLibErrors {
     FtdiStatus(FtdiBoardStatus),
@@ -29,7 +33,9 @@ impl fmt::Debug for RapLibErrors {
             RapLibErrors::FtdiStatus(x) => format!("FTDI Error: {}", x).fmt(f),
             RapLibErrors::StreamerError(x) => format!("Streamer Error: {}", x).fmt(f),
             RapLibErrors::SettingsError(x) => format!("Settings Error: {}", x).fmt(f),
-            RapLibErrors::UnhandledError(x) => format!("Unhandled External Error: {}\nPlease restart.", x).fmt(f),
+            RapLibErrors::UnhandledError(x) => {
+                format!("Unhandled External Error: {}\nPlease restart.", x).fmt(f)
+            }
         }
     }
 }

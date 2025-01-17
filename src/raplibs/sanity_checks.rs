@@ -1,7 +1,6 @@
-use super::ftdi_wrapper::FtdiBoard;
-use super::settings::RunSettings;
-use super::write_commands::WriteCommands;
-use super::RapLibErrors;
+use super::{
+    ftdi_wrapper::FtdiBoard, settings::RunSettings, write_commands::WriteCommands, RapLibErrors,
+};
 
 use lazy_static::lazy_static;
 
