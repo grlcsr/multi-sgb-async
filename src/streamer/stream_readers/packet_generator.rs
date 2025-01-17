@@ -72,10 +72,10 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                             num_seeds -= 1;
                             // println!("Missing seeds: {}", num_seeds);
                         }
-                        Err(_) => {
-                            return Err(RapLibErrors::UnhandledError(
-                                "generate_packet: unhandled error while generating.".to_string(),
-                            ))
+                        Err(x) => {
+                            return Err(RapLibErrors::UnhandledError(format!(
+                                "generate_packet: unhandled error while generating. Error code: {}", x
+                            )))
                         }
                     }
                 }
