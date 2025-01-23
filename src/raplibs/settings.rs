@@ -1,19 +1,22 @@
-use std::fs::OpenOptions;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::sync::Mutex;
+use std::io::Read;
 
-use binext::{BinaryRead, BinaryWrite};
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 
 use super::RapLibErrors;
 
 pub(crate) const MAXIMUM_NUM_OF_DWORDS: usize = 0xffff;
+const RUN_SETTINGS_PATH: &str = "./run_settings.json";
 
 lazy_static! {
     static ref RUN_SETTINGS: Mutex<RunSettings> = Mutex::new(RunSettings::default());
     static ref HW_LIMITS: Mutex<HwLimits> = Mutex::new(HwLimits::new());
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct RunSettings {
     num_of_dwords: u16, // package size in dwords - number of 32 bit words, hardware limit is 0xffff, has to be a multiple of 0xff
     afp_threshold: u16,
@@ -239,10 +242,17 @@ impl RunSettings {
     }
 
     fn read_run_settings_from_file() -> Result<RunSettings, RapLibErrors> {
-        let run_settings_path: &str = "./run_settings.bin";
-        if let Ok(mut read_file) = OpenOptions::new().read(true).open(run_settings_path) {
-            if let Ok(run_settings) = read_file.read_binary::<RunSettings>() {
-                Ok(run_settings)
+        if let Ok(mut read_file) = File::open(RUN_SETTINGS_PATH) {
+            let mut settings_string = String::new();
+            if let Ok(_) = read_file.read_to_string(&mut settings_string) {
+                Ok(
+                    serde_json::from_str(&settings_string.as_str()).map_err(|err| {
+                        RapLibErrors::SettingsError(format!(
+                            "Failed to open run_settings.bin. Error code: {:?}",
+                            err
+                        ))
+                    })?,
+                )
             } else {
                 Err(RapLibErrors::SettingsError(
                     "Cannot read run_settings.bin".to_string(),
@@ -257,25 +267,21 @@ impl RunSettings {
 
     fn write_settings_to_file() -> Result<(), RapLibErrors> {
         let run_settings: RunSettings = *RUN_SETTINGS.lock().unwrap();
-        let run_settings_path: &str = "./run_settings.bin";
-        let mut write_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(run_settings_path)
-            .map_err(|err| {
-                RapLibErrors::SettingsError(format!(
-                    "Failed to open run_settings.bin. Error code: {:?}",
-                    err
-                ))
-            })?;
-
-        write_file.write_binary(&run_settings).map_err(|err| {
+        let settings_file = File::create(RUN_SETTINGS_PATH).map_err(|err| {
             RapLibErrors::SettingsError(format!(
-                "Cannot write run_settings to file. Error code: {:?}",
+                "Failed to open run_settings.json. Error code: {:?}",
                 err
             ))
         })?;
+        let mut writer = BufWriter::new(settings_file);
+        let _ = serde_json::to_writer(&mut writer, &run_settings);
+        writer.flush().map_err(|err| {
+            RapLibErrors::SettingsError(format!(
+                "Failed to write run_settings.json. Error code: {:?}",
+                err
+            ))
+        })?;
+
         Ok(())
     }
 
