@@ -8,7 +8,7 @@ use std::{
 
 use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{
-    global_data::{DataType, StreamData},
+    global_data::StreamData,
     SingleGeneratorBoardFSM,
 };
 use tokio::{
@@ -70,8 +70,6 @@ fn start_message_handler(
                     match message {
                         Some(data) => {
                             println!("GOT = {:?}", data);
-                            //let serialized = bincode::serialize(&data).unwrap();
-                            //println!("{:?}", serialized);
                         }
                         None => break
                     }
