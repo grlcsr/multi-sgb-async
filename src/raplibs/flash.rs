@@ -1,23 +1,13 @@
-use super::RapLibErrors;
-use super::ftdi_wrapper::FtdiBoard;
-use super::write_commands::WriteCommands;
+use super::{
+    ftdi_wrapper::FtdiBoard, write_commands::WriteCommands, RapLibErrors, FLASH_PAGESIZE,
+    FLASH_SUCCESS,
+};
 
-const FLASH_SUCCESS: u32 = 0x00004F4B;
-#[allow(dead_code)]
-const FLASH_FAILURE: u32 = 0x00455252;
-const FLASH_PAGESIZE: usize = 256;
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct FlashData {
     hv_val: f32,
     dac: u32,
     ref_temp: f32,
-}
-
-impl Default for FlashData {
-    fn default() -> Self {
-        Self::new(0.0, 0, 0.0)
-    }
 }
 
 impl FlashData {
@@ -29,7 +19,7 @@ impl FlashData {
         }
     }
 
-    pub fn get_hv(&self) -> f32 {
+    pub fn hv(&self) -> f32 {
         self.hv_val
     }
 
@@ -37,7 +27,7 @@ impl FlashData {
         self.hv_val = val;
     }
 
-    pub fn get_dac(&self) -> u32 {
+    pub fn dac(&self) -> u32 {
         self.dac
     }
 
@@ -45,7 +35,7 @@ impl FlashData {
         self.dac = val;
     }
 
-    pub fn get_ref_temp(&self) -> f32 {
+    pub fn ref_temp(&self) -> f32 {
         self.ref_temp
     }
 
@@ -53,9 +43,7 @@ impl FlashData {
         self.ref_temp = val;
     }
 
-    pub fn get_flash_info(
-        device: &FtdiBoard
-    ) -> Result<FlashData, RapLibErrors> {
+    pub fn get_flash_info(device: &FtdiBoard) -> Result<FlashData, RapLibErrors> {
         Self::inititialize_flash(device)?;
         let flash_data_page: [u8; FLASH_PAGESIZE] = Self::req_read_flash(device)?;
         Ok(Self::decode_flash_read_data(&flash_data_page))
@@ -63,21 +51,21 @@ impl FlashData {
 
     fn decode_flash_read_data(read_data: &[u8]) -> FlashData {
         let mut tmp: [u8; 4] = [0; 4];
-    
+
         tmp[1..].copy_from_slice(&read_data[17..20]);
         let hv_val: f32 = (u32::from_be_bytes(tmp) as f32) / 100.0;
-    
+
         tmp[1..].copy_from_slice(&read_data[21..24]);
         let dac: u32 = u32::from_be_bytes(tmp);
-    
+
         tmp[1..].copy_from_slice(&read_data[25..28]);
         let ref_temp: f32 = (u32::from_be_bytes(tmp) as f32) / 10.0;
-        
+
         FlashData::new(hv_val, dac, ref_temp)
     }
 
     fn inititialize_flash(device: &FtdiBoard) -> Result<(), RapLibErrors> {
-        let cmd: u8 = WriteCommands::ReqInitFlash as u8;
+        let cmd: u8 = WriteCommands::ReqInitFlash.into();
         let val: u16 = 0;
         Self::read_write_cmd_value_and_validate(device, cmd, val)
     }
@@ -96,15 +84,19 @@ impl FlashData {
             if status == FLASH_SUCCESS {
                 Ok(())
             } else {
-                Err(RapLibErrors::FlashError("FLASH communication: status mismatch.".to_string()))
+                Err(RapLibErrors::StreamerError(
+                    "FLASH communication: status mismatch.".to_string(),
+                ))
             }
         } else {
-            Err(RapLibErrors::FlashError("FLASH communication failed: cmd mismatch.".to_string()))
+            Err(RapLibErrors::StreamerError(
+                "FLASH communication failed: cmd mismatch.".to_string(),
+            ))
         }
     }
 
     fn req_read_flash(device: &FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], RapLibErrors> {
-        let cmd: u8 = WriteCommands::ReqReadFlash as u8;
+        let cmd: u8 = WriteCommands::ReqReadFlash.into();
         let val: u16 = 0;
         let mut flash_data: [u8; FLASH_PAGESIZE] = [0; FLASH_PAGESIZE];
 
@@ -113,7 +105,7 @@ impl FlashData {
                 let _ = device.read(&mut flash_data);
                 Ok(flash_data)
             }
-            Err(x) => Err(RapLibErrors::FlashError(x.to_string())),
+            Err(x) => Err(RapLibErrors::StreamerError(x.to_string())),
         }
     }
 }

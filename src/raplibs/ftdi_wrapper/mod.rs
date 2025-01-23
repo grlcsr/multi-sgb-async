@@ -1,9 +1,24 @@
 use core::time::Duration;
-use libftd2xx::{BitMode, DeviceStatus, FtStatus, Ftdi, FtdiCommon};
-use std::sync::{Arc, Mutex, MutexGuard};
+use libftd2xx::{
+    list_devices as ftdi_ld, BitMode, DeviceInfo, DeviceStatus, FtStatus, Ftdi, FtdiCommon,
+};
+use std::{
+    fmt,
+    sync::{Arc, Mutex, MutexGuard},
+};
+
+/*
+    Returns the list of devices currently connected to the computer
+*/
+pub fn list_devices() -> Result<Vec<String>, FtdiBoardStatus> {
+    Ok((ftdi_ld()?)
+        .iter()
+        .map(|device_info: &DeviceInfo| device_info.serial_number.clone())
+        .collect())
+}
 
 #[derive(Debug)]
-pub struct FtdiBoard  {
+pub struct FtdiBoard {
     device: Option<Arc<Mutex<Ftdi>>>,
 }
 
@@ -14,19 +29,21 @@ impl Default for FtdiBoard {
 }
 
 impl FtdiBoard {
-    pub fn new(t: Option<Ftdi>) -> Self {        
+    pub fn new(t: Option<Ftdi>) -> Self {
         match t {
-            None => Self {
-                device: None
-            },
+            None => Self { device: None },
             Some(t) => Self {
-                device: Some(Arc::new(Mutex::new(t)))
-            }
+                device: Some(Arc::new(Mutex::new(t))),
+            },
         }
     }
 
     pub fn clean_buffer(&self) -> Result<(), FtdiBoardStatus> {
         Ok(self.get_device().purge_all()?)
+    }
+
+    pub fn close(&self) -> Result<(), FtdiBoardStatus> {
+        Ok(self.get_device().close()?)
     }
 
     pub fn get_queue_status(&self) -> Result<usize, FtdiBoardStatus> {
@@ -36,7 +53,7 @@ impl FtdiBoard {
     pub fn get_status(&self) -> Result<DeviceStatus, FtdiBoardStatus> {
         Ok(self.get_device().status()?)
     }
-    
+
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
         let board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
@@ -56,6 +73,12 @@ impl FtdiBoard {
         Ok(u32::from_be_bytes(buf_32b_u32))
     }
 
+    pub fn read_64_bit_u64(&self) -> Result<u64, FtdiBoardStatus> {
+        let mut buf_64b_u64: [u8; 8] = [0; 8];
+        let _: usize = self.read(&mut buf_64b_u64)?;
+        Ok(u64::from_be_bytes(buf_64b_u64))
+    }
+
     pub fn write(&self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
         let mut tdc_command: [u8; 4] = [0; 4];
         tdc_command[0] = 0xa5;
@@ -64,7 +87,7 @@ impl FtdiBoard {
         let value_u8: [u8; 2] = value.to_be_bytes();
         tdc_command[1..3].copy_from_slice(&value_u8[..]);
 
-        //println!("TDC command: {:?}", tdc_command);
+        // println!("TDC command: {:?}", tdc_command);
 
         Ok(self.get_device().write(&tdc_command)?)
     }
@@ -74,16 +97,15 @@ impl FtdiBoard {
         self.get_device().set_bit_mode(0xff, BitMode::from(0x00))?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x40))?;
         self.get_device().set_flow_control_rts_cts()?;
-        self.get_device().set_timeouts(Duration::from_millis(250), Duration::from_millis(250))?;
+        self.get_device()
+            .set_timeouts(Duration::from_millis(250), Duration::from_millis(250))?;
         Ok(())
     }
 
     fn get_device(&self) -> MutexGuard<'_, Ftdi> {
         match &self.device {
-            Some(arc_mutex) => {
-                arc_mutex.as_ref().lock().expect("Failed to lock device.")
-            }
-            None => panic!("Unhandled error: no device initialized!!")
+            Some(arc_mutex) => arc_mutex.as_ref().lock().expect("Failed to lock device."),
+            None => panic!("Unhandled error: no device initialized!!"),
         }
     }
 }
@@ -98,13 +120,17 @@ impl Clone for FtdiBoard {
 
 #[derive(Debug)]
 pub struct FtdiBoardStatus {
-    err: String
+    err: String,
 }
 
 impl From<FtStatus> for FtdiBoardStatus {
     fn from(x: FtStatus) -> FtdiBoardStatus {
-        FtdiBoardStatus {
-            err: x.to_string()
-        }
+        FtdiBoardStatus { err: x.to_string() }
+    }
+}
+
+impl std::fmt::Display for FtdiBoardStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error code: {}", self.err)
     }
 }

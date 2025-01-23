@@ -1,244 +1,390 @@
 pub(crate) mod global_data;
-pub(crate) mod stream_reader;
+pub(crate) mod stream_readers;
 
-use global_data::FRESH_NIBBLES_AFTER_RESET;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio_stream::Stream;
+use tokio::{select, sync::mpsc};
+use tokio_util::sync::CancellationToken;
 
-use super::raplibs::ftdi_wrapper::FtdiBoard;
-use stream_reader::{SGBStreamer, StreamResult};
+use crate::raplibs::{
+    base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256,
+    RapLibErrors,
+};
+use global_data::{DataType, StreamData, FRESH_NIBBLES_AFTER_RESET};
+use stream_readers::{
+    device_flusher::FlushDevice, fifo_reader::FifoReader, packet_generator::PacketGenerator,
+    temperature_stabilizer::TemperatureStabilizer,
+};
 
+#[derive(PartialEq)]
 enum StreamerState {
     OpenConnection,
     ReadFlash,
     PrepareInitialization,
     Initalize,
-    WaitingNibbles,
-    WriteSettings,
     TempStabilization,
+    WriteSettings,
     ReadStream,
     ReadTests,
     TempCompensation,
+    CheckSettings,
     Termination,
+    ErrorHandler,
 }
 
 pub struct SingleGeneratorBoardFSM {
     state: StreamerState,
-    serial: String,
+    serial_number: String,
+    board: FtdiBoard,
 
-    rx_stream: SGBStreamer,
-
-    total_streamed_bytes: usize,
-
-    waiting_end_of_generation: bool,
+    flash_default: FlashData,
+    flash_calib: FlashData,
+    run_settings_local: RunSettings,
     v_counter_last: i32,
-    nibble_polls: u8,
+
+    tx_channel: Option<mpsc::Sender<StreamData>>,
+    cancellation_token: CancellationToken,
 }
 
 impl SingleGeneratorBoardFSM {
-    pub fn new(serial: &'static str) -> Self {
+    pub fn new(
+        serial: String,
+        tx_channel: Option<mpsc::Sender<StreamData>>,
+        cancellation_token: CancellationToken,
+    ) -> Self {
         Self {
-            serial: serial.to_string(),
-            state: StreamerState::OpenConnection,
-            rx_stream: SGBStreamer::default(),
-
-            total_streamed_bytes: 0,
-
-            waiting_end_of_generation: false,
-            v_counter_last: 0,
-            nibble_polls: 0,
+            serial_number: serial,
+            tx_channel,
+            cancellation_token,
+            ..Default::default()
         }
     }
-    
-    fn get_stream(&mut self) -> &mut SGBStreamer {
-        &mut self.rx_stream
-    }
 
-    fn handle_flushing(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        let item = Pin::new(&mut self.get_stream()).poll_next(cx);
-        match item {
-            Poll::Ready(Some(buf)) => self.total_streamed_bytes += buf.bytes_read,
-            Poll::Ready(None) => {
-                self.get_stream().set_flushing(false);
-                println!(
-                    "Flushing complete. Flushed {} bytes.",
-                    self.total_streamed_bytes
-                );
-                self.reset_total_streamed_bytes();
-            }
-            _ => {}
-        }
-        cx.waker().wake_by_ref();
-        return Poll::Pending;
-    }
-
-    fn handle_waiting_end_of_generation(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        let mut v_counter: i32 = 0;
-
-        let _ = self.get_stream().write_pack(4, 0);
-        let item = Pin::new(&mut self.get_stream()).poll_next(cx);
-        match item {
-            Poll::Ready(Some(buf)) => {
-                if buf.bytes_read == 4 {
-                    v_counter =
-                        u32::from_be_bytes([buf.buf[0], buf.buf[1], buf.buf[2], buf.buf[3]]) as i32;
-                } else {
-                    panic!("DIDNT READ 32 BITS??");
+    pub async fn run(&mut self) {
+        let token = self.cancellation_token.clone();
+        loop {
+            select! {
+                _ = token.cancelled() => self.state = StreamerState::Termination,
+                e = self.handle_current_state() => {
+                    if e.is_err() {
+                        eprintln!("Error encountered: {:?}", e);
+                        self.state = StreamerState::ErrorHandler;
+                    }
                 }
             }
-            _ => {}
+
+            if self.state == StreamerState::Termination {
+                if let Err(x) = self.handle_termination().await {
+                    println!("Error during termination of device. Error code: {}", x);
+                }
+                break;
+            }
+        }
+    }
+
+    async fn handle_current_state(&mut self) -> Result<(), RapLibErrors> {
+        match self.state {
+            StreamerState::OpenConnection => self.handle_open_connection().await,
+            StreamerState::ReadFlash => self.handle_read_flash().await,
+            StreamerState::PrepareInitialization => self.handle_prepare_initialization().await,
+            StreamerState::Initalize => self.handle_initialize().await,
+            StreamerState::WriteSettings => self.handle_write_settings().await,
+            StreamerState::TempStabilization => self.handle_temp_stabilization().await,
+            StreamerState::ReadStream => self.handle_read_stream().await,
+            StreamerState::ReadTests => self.handle_read_tests().await,
+            StreamerState::TempCompensation => self.handle_temp_compensation().await,
+            StreamerState::CheckSettings => self.handle_check_settings().await,
+            StreamerState::Termination => Ok(()),
+            StreamerState::ErrorHandler => self.handle_error().await,
+        }
+    }
+
+    async fn handle_open_connection(&mut self) -> Result<(), RapLibErrors> {
+        println!("Opening Connection.");
+        self.board = base::open_with_serial(&self.serial_number)?;
+        self.run_settings_local = RunSettings::get_run_settings()?;
+        self.flush_device().await?;
+
+        self.state = StreamerState::ReadFlash;
+        Ok(())
+    }
+
+    async fn handle_read_flash(&mut self) -> Result<(), RapLibErrors> {
+        println!("Reading flash data.");
+        self.flash_default = FlashData::get_flash_info(&self.board)?;
+        self.flash_calib = self.flash_default.clone();
+
+        println!("Flash data initialized: {:?}", self.flash_default);
+
+        self.state = StreamerState::PrepareInitialization;
+        Ok(())
+    }
+
+    async fn handle_prepare_initialization(&mut self) -> Result<(), RapLibErrors> {
+        println!("Preparing board for initialization.");
+        self.stop_device().await?;
+        self.flush_device().await?;
+
+        self.state = StreamerState::Initalize;
+        Ok(())
+    }
+
+    async fn handle_initialize(&mut self) -> Result<(), RapLibErrors> {
+        println!("Initializing board.");
+        base::check_board_communication(&self.board)?;
+
+        let hv_val = self.flash_default.hv();
+        let dac = self.flash_default.dac();
+        base::initialize_sipm_parameters(&self.board, hv_val, dac)?;
+
+        let afp_threshold = self.run_settings_local.get_afp_threshold();
+        base::set_tdc_time_threshold(&self.board, afp_threshold)?;
+
+        self.reset_nibbles().await?;
+
+        self.state = StreamerState::WriteSettings;
+        Ok(())
+    }
+
+    async fn handle_write_settings(&mut self) -> Result<(), RapLibErrors> {
+        println!("Writing settings to device.");
+        self.write_run_settings_to_device()?;
+        self.prepare_fifos().await?;
+
+        self.state = StreamerState::TempStabilization;
+        Ok(())
+    }
+
+    async fn handle_temp_stabilization(&mut self) -> Result<(), RapLibErrors> {
+        println!("Performing temperature stabilization.");
+        let timeout = Duration::from_secs(20);
+        let mut stabilizer =
+            TemperatureStabilizer::new(&self.board, &mut self.flash_calib, timeout);
+        stabilizer.perform_temperature_stabilization().await?;
+
+        self.state = StreamerState::ReadStream;
+        Ok(())
+    }
+
+    async fn handle_read_stream(&mut self) -> Result<(), RapLibErrors> {
+        println!("Generating bits.");
+        self.generate_packet().await?;
+
+        self.state = StreamerState::ReadTests;
+        Ok(())
+    }
+
+    async fn handle_read_tests(&mut self) -> Result<(), RapLibErrors> {
+        println!("Reading FIFOs from buffer.");
+        self.read_fifo_buffers().await?;
+
+        self.state = StreamerState::TempCompensation;
+        Ok(())
+    }
+
+    async fn handle_temp_compensation(&mut self) -> Result<(), RapLibErrors> {
+        println!("Performing temperature compensation.");
+        if self.temperature_compensation()? {
+            self.prepare_fifos().await?;
         }
 
-        let mut v_counter_diff = v_counter - self.v_counter_last;
-        self.v_counter_last = v_counter;
+        self.state = StreamerState::CheckSettings;
+        Ok(())
+    }
 
-        if v_counter_diff < 0 {
-            v_counter_diff += 2_i32.pow(30);
-            println!(
-                "v_counter_diff less than zero. New val: {:?}",
-                v_counter_diff
-            );
+    async fn handle_check_settings(&mut self) -> Result<(), RapLibErrors> {
+        println!("Checking settings.");
+        if let Ok(new_settings) = RunSettings::get_run_settings() {
+            if self.run_settings_local != new_settings {
+                self.run_settings_local = new_settings;
+                self.write_run_settings_to_device()?;
+                self.prepare_fifos().await?;
+            }
         }
 
-        println!("v_counter {}, vcounter_diff {}", v_counter, v_counter_diff);
+        self.state = StreamerState::ReadStream;
+        Ok(())
+    }
 
-        self.total_streamed_bytes += v_counter_diff as usize;
+    async fn handle_error(&mut self) -> Result<(), RapLibErrors> {
+        eprintln!("Handling error state.");
 
-        if v_counter_diff == 0 {
-            self.waiting_end_of_generation = false;
+        if let Err(e) = self.handle_termination().await {
+            self.state = StreamerState::Termination;
+            eprintln!("Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}", self.serial_number, e);
+            return Ok(());
         }
 
-        cx.waker().wake_by_ref();
-        return Poll::Pending;
+        if let Err(e) = self.handle_open_connection().await {
+            self.state = StreamerState::Termination;
+            eprintln!("Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}", self.serial_number, e);
+        }
+
+        if let Some(ch) = &self.tx_channel {
+            if ch.is_closed() {
+                self.state = StreamerState::Termination;
+                eprintln!("Serial: {}; Tx channel closed. Terminating.", self.serial_number);
+            }
+        }
+        Ok(())
     }
 
-    fn open_stream(&mut self) {
-        self.rx_stream = SGBStreamer::new(&self.serial);
+    async fn handle_termination(&mut self) -> Result<(), RapLibErrors> {
+        println!("Terminating device.");
+        if let Some(tx) = &self.tx_channel {
+            let data: StreamData = StreamData {
+                serial: self.serial_number.clone(),
+                data: Some(DataType::DeviceError("Termination.".to_string()))
+            };
+            let _ = tx.send(data).await;
+        }
+        
+        base::stop(&self.board)?;
+        self.flush_device().await?;
+        base::close(&self.board)?;
+        self.board = Default::default();
+        Ok(())
     }
 
-    fn set_wait_end_of_generation(&mut self) {
-        self.get_stream().set_timeout(Duration::from_secs(1));
-        self.get_stream().set_last_poll_time();
-        self.waiting_end_of_generation = true;
+    async fn flush_device(&mut self) -> Result<(), RapLibErrors> {
+        println!("Flushing device, please wait.");
+        let _timeout = Duration::from_secs(1);
+        let flushed_bytes = FlushDevice::new(&self.board, _timeout)
+            .flush_device()
+            .await?;
+        Ok(println!("Flushed {flushed_bytes} bytes!"))
     }
 
-    fn is_waiting_end_of_generation(&self) -> bool {
-        self.waiting_end_of_generation
+    async fn generate_packet(&mut self) -> Result<(), RapLibErrors> {
+        if let Some(tx_channel) = self.tx_channel.clone() {
+            let serial_number = self.serial_number.clone();
+            let max_dwords = self.run_settings_local.get_num_of_dwords();
+
+            let mut packet_generator =
+                PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
+            return Ok(packet_generator.generate_packet().await?);
+        }
+        Err(RapLibErrors::UnhandledError(
+            "No transmitter channel found. Restart the application.".to_string(),
+        ))
     }
 
-    fn reset_total_streamed_bytes(&mut self) {
-        self.total_streamed_bytes = 0;
+    async fn prepare_fifos(&mut self) -> Result<(), RapLibErrors> {
+        base::reset_fail_flag_latch(&self.board)?;
+        base::reset_rap_values(&self.board, true, true, true)?;
+        let _ = self.wait_for_end_of_generation().await;
+        self.flush_device().await?;
+        Ok(())
+    }
+
+    async fn read_fifo_buffers(&mut self) -> Result<(), RapLibErrors> {
+        if let Some(tx_channel) = self.tx_channel.clone() {
+            let serial_number = self.serial_number.clone();
+
+            let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
+            return Ok(fifo_reader.read_fifo_results().await?);
+        }
+        Err(RapLibErrors::UnhandledError(
+            "No transmitter channel found. Restart the application.".to_string(),
+        ))
+    }
+
+    async fn reset_nibbles(&mut self) -> Result<(), RapLibErrors> {
+        for _i in 0..5 {
+            base::reset_rap_values(&mut self.board, true, true, true)?;
+
+            if let FRESH_NIBBLES_AFTER_RESET = self.wait_for_end_of_generation().await? {
+                return Ok(());
+            }
+        }
+        Err(RapLibErrors::StreamerError(
+            "Cannot reset to a known state".to_string(),
+        ))
+    }
+
+    async fn stop_device(&mut self) -> Result<(), RapLibErrors> {
+        let _ = base::stop(&mut self.board)?;
+        Ok(())
+    }
+
+    async fn wait_for_end_of_generation(&mut self) -> Result<i32, RapLibErrors> {
+        let mut v_counter_total: i32 = 0;
+
+        loop {
+            let v_counter_diff: Result<i32, RapLibErrors> = async {
+                base::write_pack(&mut self.board, 4, 0)?;
+                let v_counter: i32 = self.board.read_32_bit_u32()? as i32;
+                let mut v_counter_diff = v_counter - self.v_counter_last;
+
+                if v_counter_diff < 0 {
+                    v_counter_diff += 2_i32.pow(30);
+                    println!(
+                        "v_counter_diff less than zero. New val: {:?}",
+                        v_counter_diff
+                    );
+                }
+
+                v_counter_total += v_counter_diff;
+                self.v_counter_last = v_counter;
+
+                Ok(v_counter_diff)
+            }
+            .await;
+
+            if let Ok(0) = v_counter_diff {
+                break;
+            }
+
+            if let Err(err) = v_counter_diff {
+                return Err(err);
+            }
+        }
+
+        Ok(v_counter_total)
+    }
+
+    fn write_run_settings_to_device(&self) -> Result<(), RapLibErrors> {
+        let afp_threshold: u16 = self.run_settings_local.get_afp_threshold();
+
+        sanity_checks::update_fpga_settings(&self.board, self.run_settings_local)?;
+        sha256::perform_accelerator_initialization(&self.board)?;
+        sha256::set_reduction_ratio(&self.board, self.run_settings_local)?;
+        base::set_tdc_time_threshold(&self.board, afp_threshold)?;
+
+        Ok(())
+    }
+
+    fn temperature_compensation(&mut self) -> Result<bool, RapLibErrors> {
+        let flash_default = self.flash_default;
+        let temperature_now = base::req_temperature(&self.board)?;
+        let hv_now = base::hv_compensate(
+            temperature_now,
+            flash_default.hv(),
+            flash_default.ref_temp(),
+        );
+        self.flash_calib.set_hv(hv_now);
+        base::set_hvdac(&self.board, hv_now)?;
+
+        let delta_t = (self.flash_calib.ref_temp() - temperature_now).abs();
+        if delta_t > 2.0 {
+            self.flash_calib.set_ref_temp(temperature_now);
+            return Ok(true);
+        }
+        return Ok(false);
     }
 }
 
-impl Future for SingleGeneratorBoardFSM {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        loop {
-            if self.get_stream().is_flushing() {
-                self.get_stream().set_read_32_bits_stream(false);
-                return self.handle_flushing(cx);
-            } else if self.is_waiting_end_of_generation() {
-                self.get_stream().set_read_32_bits_stream(true);
-                return self.handle_waiting_end_of_generation(cx);
-            }
-
-            match &self.state {
-                StreamerState::OpenConnection => {
-                    self.open_stream();
-                    self.get_stream().flush_device();
-
-                    self.state = StreamerState::ReadFlash;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::ReadFlash => {
-                    println!("Initializing Flash data.");
-                    self.rx_stream.initialize_flash();
-
-                    self.state = StreamerState::PrepareInitialization;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::PrepareInitialization => {
-                    println!("Preparing Board for initialization.");
-                    self.get_stream().stop_device();
-                    self.get_stream().flush_device();
-
-                    self.state = StreamerState::Initalize;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::Initalize => {
-                    println!("Initializing Board.");
-                    self.get_stream().initialize_board();
-
-                    self.state = StreamerState::WaitingNibbles;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::WaitingNibbles => {
-                    println!("Waiting Nibbles.");
-                    self.reset_total_streamed_bytes();
-
-                    let generated_nibbles: i32 = self.total_streamed_bytes as i32;
-                    if generated_nibbles != FRESH_NIBBLES_AFTER_RESET {
-                        self.get_stream().reset_rap_values(true, true, true);
-                        self.set_wait_end_of_generation();
-                        
-                        self.nibble_polls += 1;
-                        if self.nibble_polls >= 5 {
-                            panic!("Can't reset board to known state.");
-                        }
-                    } else {
-                        self.nibble_polls = 0;
-                    }
-
-                    self.state = StreamerState::TempStabilization;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-
-                StreamerState::TempStabilization => {
-                    let flash_calib = self.get_stream().get_flash_calib();
-                    let temperature_now: f32 = self.get_stream().req_temperature();
-                    let delta_t = f32::abs(flash_calib.get_ref_temp() - temperature_now);
-
-                    self.get_stream().set_gate_dcr();
-
-
-                    self.state = StreamerState::WriteSettings;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-                }
-                
-                StreamerState::WriteSettings => {
-                    self.get_stream().write_run_settings_to_device();
-                    self.get_stream().reset_rap_values(true, true, true);
-                    self.set_wait_end_of_generation();
-                    //self.get_stream().flush_device();
-
-                    self.state = StreamerState::ReadStream;
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
-
-                }
-
-                StreamerState::ReadStream => {
-                    return Poll::Ready(());
-                }
-                StreamerState::ReadTests => todo!(),
-                StreamerState::TempCompensation => todo!(),
-                StreamerState::Termination => todo!(),
-            }
+impl Default for SingleGeneratorBoardFSM {
+    fn default() -> Self {
+        Self {
+            state: StreamerState::OpenConnection,
+            serial_number: "default".to_string(),
+            board: FtdiBoard::default(),
+            flash_default: FlashData::default(),
+            flash_calib: FlashData::default(),
+            run_settings_local: RunSettings::default(),
+            v_counter_last: 0,
+            tx_channel: None,
+            cancellation_token: CancellationToken::default(),
         }
     }
 }
