@@ -78,7 +78,14 @@ fn start_message_handler(
                                     if let Err(res) = socket.write_all(data_serialized.as_bytes()).await {
                                         tcp_stream = None;
                                         println!("Error connecting to the socket: {:?}", res);
+                                    } else {
+                                        let delimiter = "\n";
+                                        if let Err(res) = socket.write_all(delimiter.as_bytes()).await {
+                                            tcp_stream = None;
+                                            println!("Error connecting to the socket: {:?}", res);
+                                        }
                                     }
+
                                 } else {
                                     println!("No socket connected. Printing data: {:?}", data_serialized);
                                 }
