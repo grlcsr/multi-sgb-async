@@ -70,7 +70,6 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     match self.channel.send(stream_results).await {
                         Ok(_) => {
                             num_seeds -= 1;
-                            // println!("Missing seeds: {}", num_seeds);
                         }
                         Err(x) => {
                             return Err(RapLibErrors::UnhandledError(format!(
