@@ -13,3 +13,4 @@ tokio-stream = "0.1.17"
 serde = {version = "1.0.217", features = ["derive", "alloc"] }
 serde_json = {version = "1.0.137"}
 
+serde-big-array = "0.5.1"

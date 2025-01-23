@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+use serde::{Serialize, Deserialize};
+use serde_big_array::BigArray;
+
 pub(crate) const SEED_LENGTH: usize = 2048 / 8;
 pub(crate) const BUFFER_SIZE: usize = SEED_LENGTH;
 pub(crate) const BUFFER_SIZE_FLUSHING: usize = 100000;
@@ -10,7 +13,7 @@ pub(crate) const RCT_THR: usize = 6;
 pub(crate) const APT_THR_UP: usize = 62;
 pub(crate) const APT_THR_DOWN: usize = 8;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum DataType {
     DeviceError(String),
     RawStream(RawStream),
@@ -39,14 +42,17 @@ impl_from_for_data_type! {
     Vec<u8> => Sha256,
 }
 
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StreamData {
     pub serial: String,
     pub data: Option<DataType>,
 }
 
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RawStream {
+    #[serde(with = "BigArray")]
     buf: [u8; BUFFER_SIZE],
     rct_fail: bool,
     apt_fail: bool,

@@ -274,7 +274,7 @@ impl RunSettings {
             ))
         })?;
         let mut writer = BufWriter::new(settings_file);
-        let _ = serde_json::to_writer(&mut writer, &run_settings);
+        let _ = serde_json::to_writer_pretty(&mut writer, &run_settings);
         writer.flush().map_err(|err| {
             RapLibErrors::SettingsError(format!(
                 "Failed to write run_settings.json. Error code: {:?}",
