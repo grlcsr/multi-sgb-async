@@ -92,8 +92,8 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
         let apt_init_sym = raw_bits[0] >> 4;
         let mut rct_prev = apt_init_sym;
 
-        let mut apt_count = 0;
-        let mut rct_count = 0;
+        let mut apt_count = 1;
+        let mut rct_count = 1;
 
         let mut apt_fail = false;
         let mut rct_fail = false;
@@ -107,7 +107,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     rct_fail = true;
                 }
             } else {
-                rct_count = 0;
+                rct_count = 1;
             }
 
             rct_prev = sym >> 4;
@@ -119,7 +119,7 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     rct_fail = true;
                 }
             } else {
-                rct_count = 0;
+                rct_count = 1;
             }
 
             rct_prev = sym & 15;
@@ -136,6 +136,10 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
 
         if apt_count >= APT_THR_UP || apt_count <= APT_THR_DOWN {
             apt_fail = true;
+        }
+
+        if apt_fail || rct_fail {            
+            println!("FAILED apt: {} rct: {}", apt_fail, rct_fail);
         }
 
         [rct_fail, apt_fail]
