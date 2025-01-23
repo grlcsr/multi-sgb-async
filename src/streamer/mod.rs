@@ -9,7 +9,7 @@ use crate::raplibs::{
     base, flash::FlashData, ftdi_wrapper::FtdiBoard, sanity_checks, settings::RunSettings, sha256,
     RapLibErrors,
 };
-use global_data::{StreamData, FRESH_NIBBLES_AFTER_RESET};
+use global_data::{DataType, StreamData, FRESH_NIBBLES_AFTER_RESET};
 use stream_readers::{
     device_flusher::FlushDevice, fifo_reader::FifoReader, packet_generator::PacketGenerator,
     temperature_stabilizer::TemperatureStabilizer,
@@ -230,6 +230,14 @@ impl SingleGeneratorBoardFSM {
 
     async fn handle_termination(&mut self) -> Result<(), RapLibErrors> {
         println!("Terminating device.");
+        if let Some(tx) = &self.tx_channel {
+            let data: StreamData = StreamData {
+                serial: self.serial_number.clone(),
+                data: Some(DataType::DeviceError("Termination.".to_string()))
+            };
+            let _ = tx.send(data).await;
+        }
+        
         base::stop(&self.board)?;
         self.flush_device().await?;
         base::close(&self.board)?;
