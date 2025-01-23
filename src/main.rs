@@ -20,8 +20,6 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-//const LOCAL_ADDRESS: &str = "127.69.42.0:1412";
-
 fn main() {
     if let Err(err) = initialize_settings() {
         println!("Settings initialization failed! {}", err);
