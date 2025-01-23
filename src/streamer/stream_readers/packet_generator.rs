@@ -137,10 +137,6 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
             apt_fail = true;
         }
 
-        if apt_fail || rct_fail {            
-            println!("FAILED apt: {} rct: {}", apt_fail, rct_fail);
-        }
-
         [rct_fail, apt_fail]
     }
 }
