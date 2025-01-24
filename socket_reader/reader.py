@@ -12,7 +12,7 @@ def update_serial_stats(data):
         raw_data = parsed_data.get("data", {}).get("RawStream", {})
         
         if serial:
-            serial_stats[serial]["buf_count"] += len(raw_data.get("buf", []))
+            serial_stats[serial]["buf_count"] += 1 #len(raw_data.get("buf", []))
             if raw_data.get("rct_fail"):
                 serial_stats[serial]["rct_fail_count"] += 1
             if raw_data.get("apt_fail"):
