@@ -1,5 +1,5 @@
-use tokio::time::sleep;
 use std::time::{Duration, Instant};
+use tokio::time::sleep;
 
 use crate::raplibs::{base, flash::FlashData, ftdi_wrapper::FtdiBoard, RapLibErrors};
 

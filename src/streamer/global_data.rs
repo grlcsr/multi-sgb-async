@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 pub(crate) const SEED_LENGTH: usize = 2048 / 8;

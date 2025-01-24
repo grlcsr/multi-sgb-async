@@ -2,13 +2,20 @@ pub mod raplibs;
 pub mod streamer;
 
 use std::{
-    collections::{HashMap, HashSet}, time::{Duration, Instant}
+    collections::{HashMap, HashSet},
+    time::{Duration, Instant},
 };
 
 use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{global_data::StreamData, SingleGeneratorBoardFSM};
 use tokio::{
-    io::AsyncWriteExt, net::{TcpListener, TcpStream}, runtime::Runtime, select, signal, sync::mpsc, task::{JoinError, JoinHandle}, time::sleep
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+    runtime::Runtime,
+    select, signal,
+    sync::mpsc,
+    task::{JoinError, JoinHandle},
+    time::sleep,
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -27,7 +34,7 @@ fn main() {
 async fn async_main() {
     let cancellation_token = CancellationToken::new();
     let signal_handler = start_signal_handler(cancellation_token.clone());
-    
+
     let (tx, rx) = mpsc::channel::<StreamData>(1000);
     let message_handler = start_message_handler(rx, cancellation_token.clone());
 

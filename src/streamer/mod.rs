@@ -210,19 +210,28 @@ impl SingleGeneratorBoardFSM {
 
         if let Err(e) = self.handle_termination().await {
             self.state = StreamerState::Termination;
-            eprintln!("Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}", self.serial_number, e);
+            eprintln!(
+                "Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}",
+                self.serial_number, e
+            );
             return Ok(());
         }
 
         if let Err(e) = self.handle_open_connection().await {
             self.state = StreamerState::Termination;
-            eprintln!("Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}", self.serial_number, e);
+            eprintln!(
+                "Serial: {}; Unable to handle error. Terminating device.\nError code: {:?}",
+                self.serial_number, e
+            );
         }
 
         if let Some(ch) = &self.tx_channel {
             if ch.is_closed() {
                 self.state = StreamerState::Termination;
-                eprintln!("Serial: {}; Tx channel closed. Terminating.", self.serial_number);
+                eprintln!(
+                    "Serial: {}; Tx channel closed. Terminating.",
+                    self.serial_number
+                );
             }
         }
         Ok(())
@@ -233,11 +242,11 @@ impl SingleGeneratorBoardFSM {
         if let Some(tx) = &self.tx_channel {
             let data: StreamData = StreamData {
                 serial: self.serial_number.clone(),
-                data: Some(DataType::DeviceError("Termination.".to_string()))
+                data: Some(DataType::DeviceError("Termination.".to_string())),
             };
             let _ = tx.send(data).await;
         }
-        
+
         base::stop(&self.board)?;
         self.flush_device().await?;
         base::close(&self.board)?;

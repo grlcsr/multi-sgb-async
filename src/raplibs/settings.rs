@@ -1,7 +1,7 @@
 use std::fs::File;
+use std::io::Read;
 use std::io::{BufWriter, Write};
 use std::sync::Mutex;
-use std::io::Read;
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
