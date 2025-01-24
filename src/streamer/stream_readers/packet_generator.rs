@@ -15,10 +15,10 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PacketGenerator<'a, 'b> {
     serial_number: String,
-    board: &'a FtdiBoard,
+    board: &'a mut FtdiBoard,
     channel: &'b mpsc::Sender<StreamData>,
 
     max_dwords: u16,
@@ -30,7 +30,7 @@ pub struct PacketGenerator<'a, 'b> {
 impl<'a, 'b> PacketGenerator<'a, 'b> {
     pub fn new(
         serial_number: String,
-        board: &'a FtdiBoard,
+        board: &'a mut FtdiBoard,
         channel: &'b mpsc::Sender<StreamData>,
         max_dwords: u16,
     ) -> Self {

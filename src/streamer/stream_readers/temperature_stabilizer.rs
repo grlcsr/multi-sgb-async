@@ -4,7 +4,7 @@ use tokio::time::sleep;
 use crate::raplibs::{base, flash::FlashData, ftdi_wrapper::FtdiBoard, RapLibErrors};
 
 pub struct TemperatureStabilizer<'a, 'b> {
-    board: &'a FtdiBoard,
+    board: &'a mut FtdiBoard,
     flash_data: &'b mut FlashData,
 
     delay: Duration,
@@ -12,7 +12,7 @@ pub struct TemperatureStabilizer<'a, 'b> {
 }
 
 impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
-    pub fn new(board: &'a FtdiBoard, flash_data: &'b mut FlashData, timeout: Duration) -> Self {
+    pub fn new(board: &'a mut FtdiBoard, flash_data: &'b mut FlashData, timeout: Duration) -> Self {
         Self {
             board,
             flash_data,
@@ -44,7 +44,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
     }
 
     async fn perform_stabilization_step(
-        &self,
+        &mut self,
         temperature_now: &mut f32,
         delta_t: &mut f32,
     ) -> Result<(), RapLibErrors> {
@@ -79,7 +79,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         base::set_gate_dcr(self.board, value)
     }
 
-    async fn await_next(&self) -> Result<f32, RapLibErrors> {
+    async fn await_next(&mut self) -> Result<f32, RapLibErrors> {
         let start_time = Instant::now();
         loop {
             if start_time.elapsed() > self.timeout {

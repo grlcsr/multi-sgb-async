@@ -43,7 +43,7 @@ impl FlashData {
         self.ref_temp = val;
     }
 
-    pub fn get_flash_info(device: &FtdiBoard) -> Result<FlashData, RapLibErrors> {
+    pub fn get_flash_info(device: &mut FtdiBoard) -> Result<FlashData, RapLibErrors> {
         Self::inititialize_flash(device)?;
         let flash_data_page: [u8; FLASH_PAGESIZE] = Self::req_read_flash(device)?;
         Ok(Self::decode_flash_read_data(&flash_data_page))
@@ -64,14 +64,14 @@ impl FlashData {
         FlashData::new(hv_val, dac, ref_temp)
     }
 
-    fn inititialize_flash(device: &FtdiBoard) -> Result<(), RapLibErrors> {
+    fn inititialize_flash(device: &mut FtdiBoard) -> Result<(), RapLibErrors> {
         let cmd: u8 = WriteCommands::ReqInitFlash.into();
         let val: u16 = 0;
         Self::read_write_cmd_value_and_validate(device, cmd, val)
     }
 
     fn read_write_cmd_value_and_validate(
-        device: &FtdiBoard,
+        device: &mut FtdiBoard,
         cmd: u8,
         val: u16,
     ) -> Result<(), RapLibErrors> {
@@ -95,7 +95,7 @@ impl FlashData {
         }
     }
 
-    fn req_read_flash(device: &FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], RapLibErrors> {
+    fn req_read_flash(device: &mut FtdiBoard) -> Result<[u8; FLASH_PAGESIZE], RapLibErrors> {
         let cmd: u8 = WriteCommands::ReqReadFlash.into();
         let val: u16 = 0;
         let mut flash_data: [u8; FLASH_PAGESIZE] = [0; FLASH_PAGESIZE];

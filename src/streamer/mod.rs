@@ -110,7 +110,7 @@ impl SingleGeneratorBoardFSM {
 
     async fn handle_read_flash(&mut self) -> Result<(), RapLibErrors> {
         println!("Reading flash data.");
-        self.flash_default = FlashData::get_flash_info(&self.board)?;
+        self.flash_default = FlashData::get_flash_info(&mut self.board)?;
         self.flash_calib = self.flash_default;
 
         println!("Flash data initialized: {:?}", self.flash_default);
@@ -130,14 +130,14 @@ impl SingleGeneratorBoardFSM {
 
     async fn handle_initialize(&mut self) -> Result<(), RapLibErrors> {
         println!("Initializing board.");
-        base::check_board_communication(&self.board)?;
+        base::check_board_communication(&mut self.board)?;
 
         let hv_val = self.flash_default.hv();
         let dac = self.flash_default.dac();
-        base::initialize_sipm_parameters(&self.board, hv_val, dac)?;
+        base::initialize_sipm_parameters(&mut self.board, hv_val, dac)?;
 
         let afp_threshold = self.run_settings_local.get_afp_threshold();
-        base::set_tdc_time_threshold(&self.board, afp_threshold)?;
+        base::set_tdc_time_threshold(&mut self.board, afp_threshold)?;
 
         self.reset_nibbles().await?;
 
@@ -158,7 +158,7 @@ impl SingleGeneratorBoardFSM {
         println!("Performing temperature stabilization.");
         let timeout = Duration::from_secs(20);
         let mut stabilizer =
-            TemperatureStabilizer::new(&self.board, &mut self.flash_calib, timeout);
+            TemperatureStabilizer::new(&mut self.board, &mut self.flash_calib, timeout);
         stabilizer.perform_temperature_stabilization().await?;
 
         self.state = StreamerState::ReadStream;
@@ -247,9 +247,9 @@ impl SingleGeneratorBoardFSM {
             let _ = tx.send(data).await;
         }
 
-        base::stop(&self.board)?;
+        base::stop(&mut self.board)?;
         self.flush_device().await?;
-        base::close(&self.board)?;
+        base::close(&mut self.board)?;
         self.board = Default::default();
         Ok(())
     }
@@ -257,7 +257,7 @@ impl SingleGeneratorBoardFSM {
     async fn flush_device(&mut self) -> Result<(), RapLibErrors> {
         println!("Flushing device, please wait.");
         let _timeout = Duration::from_secs(1);
-        let flushed_bytes = FlushDevice::new(&self.board, _timeout)
+        let flushed_bytes = FlushDevice::new(&mut self.board, _timeout)
             .flush_device()
             .await?;
         Ok(println!("Flushed {flushed_bytes} bytes!"))
@@ -269,7 +269,7 @@ impl SingleGeneratorBoardFSM {
             let max_dwords = self.run_settings_local.get_num_of_dwords();
 
             let mut packet_generator =
-                PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
+                PacketGenerator::new(serial_number, &mut self.board, &tx_channel, max_dwords);
             return packet_generator.generate_packet().await;
         }
         Err(RapLibErrors::UnhandledError(
@@ -278,8 +278,8 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn prepare_fifos(&mut self) -> Result<(), RapLibErrors> {
-        base::reset_fail_flag_latch(&self.board)?;
-        base::reset_rap_values(&self.board, true, true, true)?;
+        base::reset_fail_flag_latch(&mut self.board)?;
+        base::reset_rap_values(&mut self.board, true, true, true)?;
         let _ = self.wait_for_end_of_generation().await;
         self.flush_device().await?;
         Ok(())
@@ -289,7 +289,7 @@ impl SingleGeneratorBoardFSM {
         if let Some(tx_channel) = self.tx_channel.clone() {
             let serial_number = self.serial_number.clone();
 
-            let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
+            let mut fifo_reader = FifoReader::new(serial_number, &mut self.board, &tx_channel);
             return fifo_reader.read_fifo_results().await;
         }
         Err(RapLibErrors::UnhandledError(
@@ -299,7 +299,7 @@ impl SingleGeneratorBoardFSM {
 
     async fn reset_nibbles(&mut self) -> Result<(), RapLibErrors> {
         for _i in 0..5 {
-            base::reset_rap_values(&self.board, true, true, true)?;
+            base::reset_rap_values(&mut self.board, true, true, true)?;
 
             if let FRESH_NIBBLES_AFTER_RESET = self.wait_for_end_of_generation().await? {
                 return Ok(());
@@ -311,7 +311,7 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn stop_device(&mut self) -> Result<(), RapLibErrors> {
-        let _ = base::stop(&self.board)?;
+        let _ = base::stop(&mut self.board)?;
         Ok(())
     }
 
@@ -320,7 +320,7 @@ impl SingleGeneratorBoardFSM {
 
         loop {
             let v_counter_diff: Result<i32, RapLibErrors> = async {
-                base::write_pack(&self.board, 4, 0)?;
+                base::write_pack(&mut self.board, 4, 0)?;
                 let v_counter: i32 = self.board.read_32_bit_u32()? as i32;
                 let mut v_counter_diff = v_counter - self.v_counter_last;
 
@@ -347,27 +347,27 @@ impl SingleGeneratorBoardFSM {
         Ok(v_counter_total)
     }
 
-    fn write_run_settings_to_device(&self) -> Result<(), RapLibErrors> {
+    fn write_run_settings_to_device(&mut self) -> Result<(), RapLibErrors> {
         let afp_threshold: u16 = self.run_settings_local.get_afp_threshold();
 
-        sanity_checks::update_fpga_settings(&self.board, self.run_settings_local)?;
-        sha256::perform_accelerator_initialization(&self.board)?;
-        sha256::set_reduction_ratio(&self.board, self.run_settings_local)?;
-        base::set_tdc_time_threshold(&self.board, afp_threshold)?;
+        sanity_checks::update_fpga_settings(&mut self.board, self.run_settings_local)?;
+        sha256::perform_accelerator_initialization(&mut self.board)?;
+        sha256::set_reduction_ratio(&mut self.board, self.run_settings_local)?;
+        base::set_tdc_time_threshold(&mut self.board, afp_threshold)?;
 
         Ok(())
     }
 
     fn temperature_compensation(&mut self) -> Result<bool, RapLibErrors> {
         let flash_default = self.flash_default;
-        let temperature_now = base::req_temperature(&self.board)?;
+        let temperature_now = base::req_temperature(&mut self.board)?;
         let hv_now = base::hv_compensate(
             temperature_now,
             flash_default.hv(),
             flash_default.ref_temp(),
         );
         self.flash_calib.set_hv(hv_now);
-        base::set_hvdac(&self.board, hv_now)?;
+        base::set_hvdac(&mut self.board, hv_now)?;
 
         let delta_t = (self.flash_calib.ref_temp() - temperature_now).abs();
         if delta_t > 2.0 {

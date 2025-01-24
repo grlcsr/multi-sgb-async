@@ -2,10 +2,7 @@ use core::time::Duration;
 use libftd2xx::{
     list_devices as ftdi_ld, BitMode, DeviceInfo, DeviceStatus, FtStatus, Ftdi, FtdiCommon,
 };
-use std::{
-    fmt,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::fmt;
 
 /*
     Returns the list of devices currently connected to the computer
@@ -19,7 +16,7 @@ pub fn list_devices() -> Result<Vec<String>, FtdiBoardStatus> {
 
 #[derive(Debug)]
 pub struct FtdiBoard {
-    device: Option<Arc<Mutex<Ftdi>>>,
+    device: Option<Ftdi>,
 }
 
 impl Default for FtdiBoard {
@@ -33,29 +30,29 @@ impl FtdiBoard {
         match t {
             None => Self { device: None },
             Some(t) => Self {
-                device: Some(Arc::new(Mutex::new(t))),
+                device: Some(t),
             },
         }
     }
 
-    pub fn clean_buffer(&self) -> Result<(), FtdiBoardStatus> {
+    pub fn clean_buffer(&mut self) -> Result<(), FtdiBoardStatus> {
         Ok(self.get_device().purge_all()?)
     }
 
-    pub fn close(&self) -> Result<(), FtdiBoardStatus> {
+    pub fn close(&mut self) -> Result<(), FtdiBoardStatus> {
         Ok(self.get_device().close()?)
     }
 
-    pub fn get_queue_status(&self) -> Result<usize, FtdiBoardStatus> {
+    pub fn get_queue_status(&mut self) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().queue_status()?)
     }
 
-    pub fn get_status(&self) -> Result<DeviceStatus, FtdiBoardStatus> {
+    pub fn get_status(&mut self) -> Result<DeviceStatus, FtdiBoardStatus> {
         Ok(self.get_device().status()?)
     }
 
     pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, FtdiBoardStatus> {
-        let board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
+        let mut board: FtdiBoard = FtdiBoard::new(Some(Ftdi::with_serial_number(serial_number)?));
 
         board.device_setup()?;
         board.clean_buffer()?;
@@ -63,23 +60,23 @@ impl FtdiBoard {
         Ok(board)
     }
 
-    pub fn read(&self, buf: &mut [u8]) -> Result<usize, FtdiBoardStatus> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, FtdiBoardStatus> {
         Ok(self.get_device().read(buf)?)
     }
 
-    pub fn read_32_bit_u32(&self) -> Result<u32, FtdiBoardStatus> {
+    pub fn read_32_bit_u32(&mut self) -> Result<u32, FtdiBoardStatus> {
         let mut buf_32b_u32: [u8; 4] = [0; 4];
         let _: usize = self.read(&mut buf_32b_u32)?;
         Ok(u32::from_be_bytes(buf_32b_u32))
     }
 
-    pub fn read_64_bit_u64(&self) -> Result<u64, FtdiBoardStatus> {
+    pub fn read_64_bit_u64(&mut self) -> Result<u64, FtdiBoardStatus> {
         let mut buf_64b_u64: [u8; 8] = [0; 8];
         let _: usize = self.read(&mut buf_64b_u64)?;
         Ok(u64::from_be_bytes(buf_64b_u64))
     }
 
-    pub fn write(&self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
+    pub fn write(&mut self, cmd: u8, value: u16) -> Result<usize, FtdiBoardStatus> {
         let mut tdc_command: [u8; 4] = [0; 4];
         tdc_command[0] = 0xa5;
         tdc_command[3] = cmd;
@@ -92,7 +89,7 @@ impl FtdiBoard {
         Ok(self.get_device().write(&tdc_command)?)
     }
 
-    fn device_setup(&self) -> Result<(), FtdiBoardStatus> {
+    fn device_setup(&mut self) -> Result<(), FtdiBoardStatus> {
         self.get_device().reset()?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x00))?;
         self.get_device().set_bit_mode(0xff, BitMode::from(0x40))?;
@@ -102,18 +99,10 @@ impl FtdiBoard {
         Ok(())
     }
 
-    fn get_device(&self) -> MutexGuard<'_, Ftdi> {
-        match &self.device {
-            Some(arc_mutex) => arc_mutex.as_ref().lock().expect("Failed to lock device."),
+    fn get_device(&mut self) -> &mut Ftdi {
+        match &mut self.device {
+            Some(dev) => dev,
             None => panic!("Unhandled error: no device initialized!!"),
-        }
-    }
-}
-
-impl Clone for FtdiBoard {
-    fn clone(&self) -> Self {
-        FtdiBoard {
-            device: self.device.as_ref().map(Arc::clone),
         }
     }
 }

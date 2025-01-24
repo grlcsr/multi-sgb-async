@@ -10,16 +10,16 @@ use crate::{
     streamer::global_data::BUFFER_SIZE_FLUSHING,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FlushDevice<'a> {
-    board: &'a FtdiBoard,
+    board: &'a mut FtdiBoard,
 
     last_poll_time: Instant,
     timeout: Duration,
 }
 
 impl<'a> FlushDevice<'a> {
-    pub fn new(board: &'a FtdiBoard, timeout: Duration) -> Self {
+    pub fn new(board: &'a mut FtdiBoard, timeout: Duration) -> Self {
         Self {
             board,
             timeout,

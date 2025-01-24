@@ -3,7 +3,7 @@ use super::{
     MIN_SUPPORTED_FIRMWARE_VERSION, SOFTWARE_VERSION,
 };
 
-pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors> {
+pub fn check_board_communication(device: &mut FtdiBoard) -> Result<(), RapLibErrors> {
     let cmd: u8 = 7;
     let value: u16 = 0x1234;
     let _ = write_pack(device, cmd, value)?;
@@ -31,7 +31,7 @@ pub fn check_board_communication(device: &FtdiBoard) -> Result<(), RapLibErrors>
     }
 }
 
-pub fn close(device: &FtdiBoard) -> Result<(), RapLibErrors> {
+pub fn close(device: &mut FtdiBoard) -> Result<(), RapLibErrors> {
     Ok(device.close()?)
 }
 
@@ -40,7 +40,7 @@ pub fn hv_compensate(temperature_now: f32, hv_val: f32, ref_temp: f32) -> f32 {
 }
 
 pub fn initialize_sipm_parameters(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     hv_val: f32,
     dac_val: u32,
 ) -> Result<(), RapLibErrors> {
@@ -53,18 +53,18 @@ pub fn open_with_serial(serial_number: &str) -> Result<FtdiBoard, RapLibErrors> 
     Ok(FtdiBoard::open_with_serial(serial_number)?)
 }
 
-pub fn request_raw_tdc_words(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+pub fn request_raw_tdc_words(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 6;
     write_pack(device, cmd, value)
 }
 
-pub fn req_read_dcr(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_dcr(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqReadDCR.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
-pub fn req_temperature(device: &FtdiBoard) -> Result<f32, RapLibErrors> {
+pub fn req_temperature(device: &mut FtdiBoard) -> Result<f32, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqTemperature.into();
     let value: u16 = 0;
     device.write(cmd, value)?;
@@ -84,14 +84,14 @@ pub fn req_temperature(device: &FtdiBoard) -> Result<f32, RapLibErrors> {
     }
 }
 
-pub fn reset_fail_flag_latch(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn reset_fail_flag_latch(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ResetFailFlagLatch.into();
     let value: u16 = 1;
     Ok(device.write(cmd, value)?)
 }
 
 pub fn reset_rap_values(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     reset_tdc: bool,
     reset_mono: bool,
     reset_sha256: bool,
@@ -110,12 +110,12 @@ pub fn reset_rap_values(
     write_pack(device, cmd, value)
 }
 
-pub fn set_gate_dcr(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+pub fn set_gate_dcr(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetGateDCR.into();
     Ok(device.write(cmd, value)?)
 }
 
-pub fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
+pub fn set_hvdac(device: &mut FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetHVDac.into();
     // Conversion of hv value formula
     let value: u16 = (1534.6 + -26.23 * f32::min(hv_val, 58.2)) as u16;
@@ -130,7 +130,7 @@ pub fn set_hvdac(device: &FtdiBoard, hv_val: f32) -> Result<usize, RapLibErrors>
 }
 
 pub fn set_tdc_time_threshold(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     afp_threshold: u16,
 ) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetTDCTimeThreshold.into();
@@ -138,19 +138,19 @@ pub fn set_tdc_time_threshold(
     Ok(device.write(cmd, value)?)
 }
 
-fn set_thdac(device: &FtdiBoard, dac_val: u32) -> Result<usize, RapLibErrors> {
+fn set_thdac(device: &mut FtdiBoard, dac_val: u32) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetThDac.into();
     let value: u16 = dac_val as u16;
     Ok(device.write(cmd, value)?)
 }
 
-pub fn stop(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn stop(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqStop.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
-pub fn write_pack(device: &FtdiBoard, cmd: u8, value: u16) -> Result<usize, RapLibErrors> {
+pub fn write_pack(device: &mut FtdiBoard, cmd: u8, value: u16) -> Result<usize, RapLibErrors> {
     let cmd1: u8 = WriteCommands::ReqWritePackFirst.into();
     let cmd2: u8 = WriteCommands::ReqWritePackSecond.into();
 

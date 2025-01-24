@@ -10,7 +10,7 @@ lazy_static! {
 }
 
 pub fn update_fpga_settings(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     run_settings: RunSettings,
 ) -> Result<(), RapLibErrors> {
     set_operation_mode(device, 0)?;
@@ -34,90 +34,90 @@ pub fn update_fpga_settings(
     Ok(())
 }
 
-fn set_operation_mode(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_operation_mode(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetOperationMode.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_report_mode(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_report_mode(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetReportMode.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_sequence_length_power_of_2(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_sequence_length_power_of_2(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetSequenceLengthPowerOf2.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_num_of_sequences_power_of_2(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_num_of_sequences_power_of_2(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_confidence_level_upper(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_confidence_level_upper(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetConfidenceLevelUpper.into();
     let value_adjusted: u16 = (value as f32 / *SF_FXP) as u16;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
-fn set_confidence_level_lower(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_confidence_level_lower(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetConfidenceLevelLower.into();
     let value_adjusted: u16 = (value as f32 / *SF_FXP) as u16;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
 fn set_fail_flag_latch_event_alarm_thr(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     value: u16,
 ) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetFailFlagLatchEventAlarmThr.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_sequence_length_runs(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_sequence_length_runs(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetSequenceLengthRuns.into();
     let value_adjusted: u16 = value - 5;
     Ok(device.write(cmd, value_adjusted)?)
 }
 
 fn set_num_of_sequences_power_of_2_runs(
-    device: &FtdiBoard,
+    device: &mut FtdiBoard,
     value: u16,
 ) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetNumOfSequencesPowerOf2Runs.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_confidence_level_runs(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_confidence_level_runs(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::SetConfidenceLevelRuns.into();
     Ok(device.write(cmd, value)?)
 }
 
-fn set_asym_nos(device: &FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
+fn set_asym_nos(device: &mut FtdiBoard, value: u16) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 8;
     crate::raplibs::base::write_pack(device, cmd, value)
 }
 
-pub fn req_read_asym_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_asym_fifo(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = 9;
     let value: u16 = 0;
     crate::raplibs::base::write_pack(device, cmd, value)
 }
 
-pub fn req_read_monobit_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_monobit_fifo(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqReadMonoFifo.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
-pub fn req_read_runs_fifo(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_runs_fifo(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqReadRunsZValFlag.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
 }
 
 #[allow(dead_code)]
-pub fn req_read_runs_stats(device: &FtdiBoard) -> Result<usize, RapLibErrors> {
+pub fn req_read_runs_stats(device: &mut FtdiBoard) -> Result<usize, RapLibErrors> {
     let cmd: u8 = WriteCommands::ReqReadRunsFlagLatches.into();
     let value: u16 = 0;
     Ok(device.write(cmd, value)?)
