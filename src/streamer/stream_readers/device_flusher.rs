@@ -30,11 +30,8 @@ impl<'a> FlushDevice<'a> {
     pub async fn flush_device(&mut self) -> Result<usize, RapLibErrors> {
         let mut total_cleaned_bytes: usize = 0;
 
-        loop {
-            match self.try_next().await? {
-                Some(read_bytes) => total_cleaned_bytes += read_bytes,
-                None => break,
-            }
+        while let Some(read_bytes) = self.try_next().await? {
+            total_cleaned_bytes += read_bytes;
         }
         Ok(total_cleaned_bytes)
     }

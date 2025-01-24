@@ -51,7 +51,7 @@ fn start_signal_handler(cancellation_token: CancellationToken) -> JoinHandle<()>
     tokio::spawn(async move {
         select! {
             _ = signal::ctrl_c() => cancellation_token.cancel(),
-            _ = cancellation_token.cancelled() => return,
+            _ = cancellation_token.cancelled() => (),
         }
     })
 }

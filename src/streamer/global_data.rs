@@ -16,7 +16,7 @@ pub(crate) const APT_THR_DOWN: usize = 8;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DataType {
     DeviceError(String),
-    RawStream(RawStream),
+    RawStream(Box<RawStream>),
     Asym(Vec<i32>),
     Monobit(Vec<(f32, u32, u32)>),
     Runs(Vec<(f64, u32, u32)>),

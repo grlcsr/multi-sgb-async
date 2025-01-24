@@ -60,11 +60,11 @@ impl<'a, 'b> PacketGenerator<'a, 'b> {
                     let _nist_tests = self.nist_tests(&read_buf).await;
                     let stream_results = StreamData {
                         serial: self.serial_number.to_string(),
-                        data: Some(DataType::RawStream(RawStream::new(
+                        data: Some(DataType::RawStream(Box::new(RawStream::new(
                             read_buf,
                             _nist_tests[0],
                             _nist_tests[1],
-                        ))),
+                        )))),
                     };
 
                     match self.channel.send(stream_results).await {

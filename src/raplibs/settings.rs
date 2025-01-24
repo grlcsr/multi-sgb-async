@@ -223,7 +223,7 @@ impl RunSettings {
     pub fn set_run_settings(&mut self) -> Result<(), RapLibErrors> {
         match self.check_run_settings_validity() {
             Ok(_) => {
-                RUN_SETTINGS.lock().unwrap().clone_from(&self);
+                RUN_SETTINGS.lock().unwrap().clone_from(self);
                 RunSettings::write_settings_to_file()?;
             }
             Err(f) => println!("{}", f),
@@ -244,9 +244,9 @@ impl RunSettings {
     fn read_run_settings_from_file() -> Result<RunSettings, RapLibErrors> {
         if let Ok(mut read_file) = File::open(RUN_SETTINGS_PATH) {
             let mut settings_string = String::new();
-            if let Ok(_) = read_file.read_to_string(&mut settings_string) {
+            if read_file.read_to_string(&mut settings_string).is_ok() {
                 Ok(
-                    serde_json::from_str(&settings_string.as_str()).map_err(|err| {
+                    serde_json::from_str(settings_string.as_str()).map_err(|err| {
                         RapLibErrors::SettingsError(format!(
                             "Failed to open run_settings.bin. Error code: {:?}",
                             err

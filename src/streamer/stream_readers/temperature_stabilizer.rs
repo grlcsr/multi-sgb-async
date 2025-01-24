@@ -61,7 +61,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
             dcr_now = dcr as f32 / 10000.0;
         }
 
-        *temperature_now = base::req_temperature(&self.board)?;
+        *temperature_now = base::req_temperature(self.board)?;
         *delta_t = *temperature_now - temperature_old;
 
         println!(
@@ -76,7 +76,7 @@ impl<'a, 'b> TemperatureStabilizer<'a, 'b> {
         // read the DCR; 2 = 1 second gate for pulse counting
         //               1 = 10 seconds
         let value = 1;
-        Ok(base::set_gate_dcr(self.board, value)?)
+        base::set_gate_dcr(self.board, value)
     }
 
     async fn await_next(&self) -> Result<f32, RapLibErrors> {

@@ -111,7 +111,7 @@ impl SingleGeneratorBoardFSM {
     async fn handle_read_flash(&mut self) -> Result<(), RapLibErrors> {
         println!("Reading flash data.");
         self.flash_default = FlashData::get_flash_info(&self.board)?;
-        self.flash_calib = self.flash_default.clone();
+        self.flash_calib = self.flash_default;
 
         println!("Flash data initialized: {:?}", self.flash_default);
 
@@ -261,7 +261,7 @@ impl SingleGeneratorBoardFSM {
 
             let mut packet_generator =
                 PacketGenerator::new(serial_number, &self.board, &tx_channel, max_dwords);
-            return Ok(packet_generator.generate_packet().await?);
+            return packet_generator.generate_packet().await;
         }
         Err(RapLibErrors::UnhandledError(
             "No transmitter channel found. Restart the application.".to_string(),
@@ -281,7 +281,7 @@ impl SingleGeneratorBoardFSM {
             let serial_number = self.serial_number.clone();
 
             let mut fifo_reader = FifoReader::new(serial_number, &self.board, &tx_channel);
-            return Ok(fifo_reader.read_fifo_results().await?);
+            return fifo_reader.read_fifo_results().await;
         }
         Err(RapLibErrors::UnhandledError(
             "No transmitter channel found. Restart the application.".to_string(),
@@ -290,7 +290,7 @@ impl SingleGeneratorBoardFSM {
 
     async fn reset_nibbles(&mut self) -> Result<(), RapLibErrors> {
         for _i in 0..5 {
-            base::reset_rap_values(&mut self.board, true, true, true)?;
+            base::reset_rap_values(&self.board, true, true, true)?;
 
             if let FRESH_NIBBLES_AFTER_RESET = self.wait_for_end_of_generation().await? {
                 return Ok(());
@@ -302,7 +302,7 @@ impl SingleGeneratorBoardFSM {
     }
 
     async fn stop_device(&mut self) -> Result<(), RapLibErrors> {
-        let _ = base::stop(&mut self.board)?;
+        let _ = base::stop(&self.board)?;
         Ok(())
     }
 
@@ -311,7 +311,7 @@ impl SingleGeneratorBoardFSM {
 
         loop {
             let v_counter_diff: Result<i32, RapLibErrors> = async {
-                base::write_pack(&mut self.board, 4, 0)?;
+                base::write_pack(&self.board, 4, 0)?;
                 let v_counter: i32 = self.board.read_32_bit_u32()? as i32;
                 let mut v_counter_diff = v_counter - self.v_counter_last;
 
@@ -332,10 +332,6 @@ impl SingleGeneratorBoardFSM {
 
             if let Ok(0) = v_counter_diff {
                 break;
-            }
-
-            if let Err(err) = v_counter_diff {
-                return Err(err);
             }
         }
 
@@ -369,7 +365,7 @@ impl SingleGeneratorBoardFSM {
             self.flash_calib.set_ref_temp(temperature_now);
             return Ok(true);
         }
-        return Ok(false);
+        Ok(false)
     }
 }
 
