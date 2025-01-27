@@ -1,11 +1,14 @@
+// Modules
 pub mod raplibs;
 pub mod streamer;
 
+// Standard Library Imports
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
 
+// External Crates
 use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{global_data::StreamData, SingleGeneratorBoardFSM};
 use tokio::{
@@ -19,11 +22,13 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+// Constants
 const LOCAL_ADDRESS: &str = "127.69.42.0:1412";
 
+// Main Entry Point
 fn main() {
     if let Err(err) = initialize_settings() {
-        println!("Settings initialization failed! {}", err);
+        eprintln!("Settings initialization failed: {}", err);
         return;
     }
 
@@ -31,15 +36,21 @@ fn main() {
     runtime.block_on(async_main());
 }
 
+// Asynchronous Main Function
 async fn async_main() {
     let cancellation_token = CancellationToken::new();
+
+    // Start signal handler
     let signal_handler = start_signal_handler(cancellation_token.clone());
 
+    // Create message handler channel
     let (tx, rx) = mpsc::channel::<StreamData>(1000);
     let message_handler = start_message_handler(rx, cancellation_token.clone());
 
     let mut task_tracker = TaskTracker::new();
     let mut device_list = HashMap::new();
+
+    // Manage devices and wait for tasks to complete
     manage_devices(
         &mut task_tracker,
         &mut device_list,
@@ -48,12 +59,15 @@ async fn async_main() {
     )
     .await;
 
+    // Await tasks
     signal_handler.await.ok();
     message_handler.await.ok();
     task_tracker.wait().await;
+
     println!("Completed Tokio!");
 }
 
+// Signal Handler
 fn start_signal_handler(cancellation_token: CancellationToken) -> JoinHandle<()> {
     tokio::spawn(async move {
         select! {
@@ -63,6 +77,7 @@ fn start_signal_handler(cancellation_token: CancellationToken) -> JoinHandle<()>
     })
 }
 
+// Message Handler
 fn start_message_handler(
     mut rx: mpsc::Receiver<StreamData>,
     cancellation_token: CancellationToken,
@@ -74,7 +89,7 @@ fn start_message_handler(
         loop {
             select! {
                 Ok((socket, addr)) = tcp_listener.accept() => {
-                    println!("Received connection with new client: {}", addr);
+                    println!("New client connected: {}", addr);
                     tcp_stream = Some(socket);
                 },
                 message = rx.recv() => {
@@ -82,31 +97,31 @@ fn start_message_handler(
                         Some(data) => {
                             if let Ok(data_serialized) = serde_json::to_string(&data) {
                                 if let Some(ref mut socket) = tcp_stream {
-                                    if let Err(res) = socket.write_all(data_serialized.as_bytes()).await {
+                                    if socket.write_all(data_serialized.as_bytes()).await.is_err() {
                                         tcp_stream = None;
-                                        println!("Error connecting to the socket: {:?}", res);
-                                    } else {
-                                        let delimiter = "\n";
-                                        if let Err(res) = socket.write_all(delimiter.as_bytes()).await {
-                                            tcp_stream = None;
-                                            println!("Error connecting to the socket: {:?}", res);
-                                        }
+                                        eprintln!("Error writing to the socket.");
+                                    } else if socket.write_all(b"\n").await.is_err() {
+                                        tcp_stream = None;
+                                        eprintln!("Error writing delimiter to the socket.");
                                     }
-
                                 } else {
-                                    println!("No socket connected. Printing data: {:?}", data_serialized);
+                                    println!("No connected socket. Data: {:?}", data_serialized);
                                 }
                             }
                         }
-                        None => break
+                        None => break,
                     }
-                }
-                _ = cancellation_token.cancelled() => rx.close(),
+                },
+                _ = cancellation_token.cancelled() => {
+                    rx.close();
+                    break;
+                },
             }
         }
     })
 }
 
+// Device Management
 async fn manage_devices(
     task_tracker: &mut TaskTracker,
     device_list: &mut HashMap<String, JoinHandle<Result<(), JoinError>>>,
@@ -114,6 +129,7 @@ async fn manage_devices(
     cancellation_token: &CancellationToken,
 ) {
     let mut timeout_check = Instant::now();
+
     loop {
         update_device_list(task_tracker, device_list, tx, cancellation_token).await;
         sleep(Duration::from_secs(1)).await;
@@ -132,51 +148,44 @@ async fn manage_devices(
     }
 }
 
+// Update Device List
 async fn update_device_list(
     task_tracker: &mut TaskTracker,
     device_list: &mut HashMap<String, JoinHandle<Result<(), JoinError>>>,
     tx: &mpsc::Sender<StreamData>,
     cancellation_token: &CancellationToken,
 ) {
-    // Comparing which devices are connected and not yet initiated
-    // and which ones have been disconnected without proper shutdown
     if let Ok(serial_list) = list_devices() {
-        let connected_devices_set: HashSet<_> = device_list.keys().cloned().collect();
-        let serial_set: HashSet<_> = serial_list.iter().cloned().collect();
+        let connected_devices: HashSet<_> = device_list.keys().cloned().collect();
+        let available_devices: HashSet<_> = serial_list.iter().cloned().collect();
 
-        let not_in_serial_set: HashSet<_> = connected_devices_set
-            .difference(&serial_set)
-            .cloned()
-            .collect();
-        let only_in_serial_set: HashSet<_> = serial_set
-            .difference(&connected_devices_set)
-            .cloned()
-            .collect();
+        let disconnected_devices = connected_devices.difference(&available_devices);
+        let new_devices = available_devices.difference(&connected_devices);
 
-        for serial_number in only_in_serial_set {
-            println!("Adding new board with serial {}", &serial_number);
+        for serial in new_devices {
+            println!("Adding new board: {}", serial);
             let handle = task_tracker.spawn(start_device(
-                serial_number.clone(),
+                serial.clone(),
                 tx.clone(),
                 cancellation_token.clone(),
             ));
-            device_list.insert(serial_number, handle);
+            device_list.insert(serial.clone(), handle);
         }
 
-        for serial_number in not_in_serial_set {
-            if let Some(handle) = device_list.get(&serial_number) {
-                if cancellation_token.is_cancelled() {
-                    handle.abort();
-                }
+        for serial in disconnected_devices {
+            if let Some(handle) = device_list.get(serial) {
                 if handle.is_finished() {
-                    println!("Removed board with serial {}", serial_number);
-                    device_list.remove(&serial_number);
+                    println!("Removing disconnected board: {}", serial);
+                    device_list.remove(serial);
+                } else {
+                    handle.abort();
                 }
             }
         }
     }
 }
 
+// Start Device Task
 fn start_device(
     serial_number: String,
     tx: mpsc::Sender<StreamData>,
@@ -189,6 +198,7 @@ fn start_device(
     })
 }
 
+// Initialize Settings
 fn initialize_settings() -> Result<(), RapLibErrors> {
     RunSettings::initialize_run_settings().map(|_| {
         println!("Initialized settings:");
