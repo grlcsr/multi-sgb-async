@@ -1,14 +1,11 @@
-// Modules
 pub mod raplibs;
 pub mod streamer;
 
-// Standard Library Imports
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
 
-// External Crates
 use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{global_data::StreamData, SingleGeneratorBoardFSM};
 use tokio::{
@@ -22,7 +19,6 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-// Constants
 const LOCAL_ADDRESS: &str = "127.69.42.0:1412";
 
 // Main Entry Point
@@ -50,16 +46,16 @@ async fn async_main() {
     let mut task_tracker = TaskTracker::new();
     let mut device_list = HashMap::new();
 
-    // Manage devices and wait for tasks to complete
-    manage_devices(
+    // Manage devices
+    let device_manager = manage_devices(
         &mut task_tracker,
         &mut device_list,
         &tx,
         &cancellation_token,
-    )
-    .await;
+    );
 
-    // Await tasks
+    // Await tasks to complete
+    device_manager.await;
     signal_handler.await.ok();
     message_handler.await.ok();
     task_tracker.wait().await;
