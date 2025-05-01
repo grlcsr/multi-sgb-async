@@ -9,11 +9,11 @@ debug = false
 [dependencies]
 libftd2xx = "0.33.1"
 lazy_static = "1.4.0"
-tokio = { version = "1.43.0", features = ["full"] }
-tokio-util = { version = "0.7.13", features = ["rt"]}
+tokio = { version = "1.44.2", features = ["full"] }
+tokio-util = { version = "0.7.15", features = ["rt"]}
 tokio-stream = "0.1.17"
 
-serde = {version = "1.0.217", features = ["derive", "alloc"] }
-serde_json = {version = "1.0.137"}
+serde = {version = "1.0.219", features = ["derive", "alloc"] }
+serde_json = {version = "1.0.140"}
 
 serde-big-array = "0.5.1"

@@ -3,6 +3,7 @@ pub mod streamer;
 
 use std::{
     collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -10,7 +11,7 @@ use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{global_data::StreamData, SingleGeneratorBoardFSM};
 use tokio::{
     io::AsyncWriteExt,
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     runtime::Runtime,
     select, signal,
     sync::mpsc,
@@ -19,7 +20,9 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-const LOCAL_ADDRESS: &str = "127.69.42.0:1412";
+type SharedSocket = Arc<Mutex<Option<TcpStream>>>;
+
+const LOCAL_ADDRESS: &str = "127.0.0.1:8080";
 
 // Main Entry Point
 fn main() {
@@ -41,7 +44,11 @@ async fn async_main() {
 
     // Create message handler channel
     let (tx, rx) = mpsc::channel::<StreamData>(1000);
-    let message_handler = start_message_handler(rx, cancellation_token.clone());
+    let shared_socket: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
+
+    let conn_handler = start_connection_listener(shared_socket.clone(), cancellation_token.clone());
+    let message_handler =
+        start_message_handler(rx, shared_socket.clone(), cancellation_token.clone());
 
     let mut task_tracker = TaskTracker::new();
     let mut device_list = HashMap::new();
@@ -56,11 +63,12 @@ async fn async_main() {
 
     // Await tasks to complete
     device_manager.await;
-    signal_handler.await.ok();
-    message_handler.await.ok();
     task_tracker.wait().await;
+    message_handler.await.ok();
+    conn_handler.await.ok();
+    signal_handler.await.ok();
 
-    println!("Completed Tokio!");
+    println!("Completed RaP!");
 }
 
 // Signal Handler
@@ -76,32 +84,29 @@ fn start_signal_handler(cancellation_token: CancellationToken) -> JoinHandle<()>
 // Message Handler
 fn start_message_handler(
     mut rx: mpsc::Receiver<StreamData>,
+    socket: SharedSocket,
     cancellation_token: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let tcp_listener = TcpListener::bind(LOCAL_ADDRESS).await.unwrap();
-        let mut tcp_stream: Option<TcpStream> = None;
-
         loop {
             select! {
-                Ok((socket, addr)) = tcp_listener.accept() => {
-                    println!("New client connected: {}", addr);
-                    tcp_stream = Some(socket);
-                },
                 message = rx.recv() => {
                     match message {
                         Some(data) => {
-                            if let Ok(data_serialized) = serde_json::to_string(&data) {
-                                if let Some(ref mut socket) = tcp_stream {
-                                    if socket.write_all(data_serialized.as_bytes()).await.is_err() {
-                                        tcp_stream = None;
-                                        eprintln!("Error writing to the socket.");
-                                    } else if socket.write_all(b"\n").await.is_err() {
-                                        tcp_stream = None;
-                                        eprintln!("Error writing delimiter to the socket.");
+                            if let Ok(serialized) = serde_json::to_string(&data) {
+                                let stream: Option<TcpStream> = socket.lock().unwrap().take();
+
+                                if let Some(mut stream) = stream {
+                                    if let Err(err) = stream.write_all(serialized.as_bytes()).await {
+                                        eprintln!("Error writing to socket: {}", err);
+                                    } else if let Err(err) = stream.write_all(b"\n").await {
+                                        eprintln!("Error writing newline to socket: {}", err);
+                                    } else {
+                                        let mut socket_guard = socket.lock().unwrap();
+                                        *socket_guard = Some(stream);
                                     }
                                 } else {
-                                    println!("No connected socket. Data: {:?}", data_serialized);
+                                    println!("No client connected. Data: {}", serialized);
                                 }
                             }
                         }
@@ -112,6 +117,28 @@ fn start_message_handler(
                     rx.close();
                     break;
                 },
+            }
+        }
+    })
+}
+
+// Listens to connection
+fn start_connection_listener(
+    socket: SharedSocket,
+    cancellation_token: CancellationToken,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind(LOCAL_ADDRESS).await.unwrap();
+        loop {
+            select! {
+                Ok((stream, _addr)) = listener.accept() => {
+                    println!("New client connected via TCP socket.");
+                    let mut socket_guard = socket.lock().unwrap();
+                    *socket_guard = Some(stream);
+                },
+                _ = cancellation_token.cancelled() => {
+                    break;
+                }
             }
         }
     })
