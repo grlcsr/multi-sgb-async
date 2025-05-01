@@ -11,7 +11,7 @@ use raplibs::{ftdi_wrapper::list_devices, settings::RunSettings, RapLibErrors};
 use streamer::{global_data::StreamData, SingleGeneratorBoardFSM};
 use tokio::{
     io::AsyncWriteExt,
-    net::TcpStream,
+    net::{TcpListener, TcpStream},
     runtime::Runtime,
     select, signal,
     sync::mpsc,
@@ -128,7 +128,7 @@ fn start_connection_listener(
     cancellation_token: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let listener = tokio::net::TcpListener::bind(LOCAL_ADDRESS).await.unwrap();
+        let listener = TcpListener::bind(LOCAL_ADDRESS).await.unwrap();
         loop {
             select! {
                 Ok((stream, _addr)) = listener.accept() => {
