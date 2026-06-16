@@ -35,11 +35,14 @@ and removed at runtime, and the whole system shuts down cleanly on Ctrl-C.
 ``
 cargo run
 ``
+
 Then connect a board. To visualize the output stream, run the Python reader in a
 separate terminal:
+
 ``
 python socket_reader/reader.py
 ``
+
 ## Status
 
 Functional and used to drive real hardware. Written as a learning project, so the code
